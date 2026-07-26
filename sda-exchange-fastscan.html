@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Sidra DEX Live — Price List</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- =========================================================
+     THIS ORDER IS REQUIRED — window.PRICE_ENGINE is defined in
+     factory-engine.js, but it needs window.rpcBatch (from
+     rpc-batch.js) and window.CONFIG (from config.js) to already
+     exist first.
+
+     The order below is MATCHED to the main wallet project
+     (index.html) so every global (CONFIG, provider, window.RPC,
+     window.rpcBatch, window.PRICE_ENGINE, TOKEN_PRICE_USD) stays
+     consistent and nothing gets loaded twice:
+
+     1. ethers.js
+     2. config.js          (CONFIG, provider, window.RPC)
+     3. rpc-batch.js        (window.rpcBatch — used by factory-engine.js)
+     4. factory-engine.js   (defines window.PRICE_ENGINE)
+     5. balance.js          (TOKEN_PRICE_USD — SDA base price, exactly
+                              the same one the main wallet uses)
+
+     If all of these are already loaded via a shared header/layout in
+     your app, remove these 5 <script src> lines to avoid double-loading.
+     ========================================================= -->
+<!-- ETHERS (must load first) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/rpc-batch.js"></script>
+<script src="js/factory-engine.js"></script>
+<script src="js/balance.js"></script>
+
+<style>
+  :root{
+    --bg:#0a0a0c; --surface-1:#131316; --surface-2:#1a1a1e; --surface-3:#212126;
+    --border:#26262b; --text-primary:#f4f3f0; --text-secondary:#8f8e8a; --text-muted:#5c5b58;
+    --amber:#f5a623; --green:#3ecf8e; --red:#e5645f;
+    --radius-lg:18px; --radius-md:12px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{background:var(--bg);color:var(--text-primary);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;display:flex;justify-content:center;}
+  .screen{width:100%;max-width:430px;min-height:100vh;display:flex;flex-direction:column;padding:20px 18px 24px;}
+  .num{font-family:'Space Grotesk',sans-serif;}
+
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand-mark{width:34px;height:34px;border-radius:9px;overflow:hidden;background:linear-gradient(155deg,var(--amber),#c97b12);display:flex;align-items:center;justify-content:center;}
+  .brand-mark img{width:100%;height:100%;object-fit:cover;}
+  .brand-name{font-size:15px;font-weight:600;line-height:1.15;}
+  .brand-sub{font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:5px;}
+  .dot{width:5px;height:5px;border-radius:50%;background:var(--green);display:inline-block;}
+  .dot.off{background:var(--red);}
+  .dot.busy{background:var(--amber);}
+  .icon-btn{width:34px;height:34px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-secondary);cursor:pointer;}
+  .icon-btn.spin svg{animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .banner{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;}
+  .banner-label{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+  .banner-row{display:flex;align-items:flex-end;justify-content:space-between;}
+  .banner-price{font-size:30px;font-weight:600;letter-spacing:-.01em;}
+  .banner-change{font-size:13px;font-weight:500;margin-top:4px;}
+  .up{color:var(--green);} .down{color:var(--red);} .flat{color:var(--text-muted);}
+  .base-chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface-3);border-radius:999px;padding:6px 10px 6px 6px;font-size:12px;color:var(--text-secondary);margin-top:12px;cursor:pointer;user-select:none;}
+  .base-chip:active{background:var(--surface-2);}
+  .base-chip b{color:var(--text-primary);font-weight:600;}
+  .base-chip .swatch{width:16px;height:16px;border-radius:50%;overflow:hidden;background:var(--amber);flex-shrink:0;}
+  .base-chip .swatch img{width:100%;height:100%;object-fit:cover;}
+  .banner-note{display:flex;align-items:flex-start;gap:6px;margin-top:10px;font-size:11px;line-height:1.4;color:var(--text-muted);}
+  .banner-note svg{flex-shrink:0;margin-top:1px;color:var(--amber);}
+
+  .progress-wrap{margin-bottom:14px;}
+  .progress-row{display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-bottom:6px;}
+  .progress-track{height:4px;border-radius:2px;background:var(--surface-2);overflow:hidden;}
+  .progress-fill{height:100%;background:var(--amber);border-radius:2px;width:0%;transition:width .25s;}
+  .progress-actions{display:flex;gap:8px;margin-top:8px;}
+  .progress-actions button{flex:1;font-size:12px;padding:7px 0;border-radius:999px;background:var(--surface-1);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;}
+  .progress-actions button.danger{color:var(--red);border-color:var(--red);}
+
+  .search{display:flex;align-items:center;gap:8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:12px;}
+  .search input{background:none;border:none;outline:none;color:var(--text-primary);font-size:13px;width:100%;font-family:'Inter';}
+  .search input::placeholder{color:var(--text-muted);}
+  .search svg{flex-shrink:0;color:var(--text-muted);}
+
+  .tabs{display:flex;gap:6px;margin-bottom:14px;}
+  .tab{flex:1;text-align:center;padding:8px 0;border-radius:999px;font-size:12px;font-weight:500;color:var(--text-secondary);background:var(--surface-1);border:1px solid var(--border);cursor:pointer;}
+  .tab.active{background:var(--amber);color:#1a1103;border-color:var(--amber);}
+
+  .list-head{display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);padding:0 4px 8px;}
+  .list-head span:last-child{cursor:pointer;}
+
+  .list{display:flex;flex-direction:column;}
+  .row{display:flex;align-items:center;justify-content:space-between;padding:11px 4px;border-bottom:1px solid var(--border);cursor:pointer;}
+  .row:last-child{border-bottom:none;}
+  .row-left{display:flex;align-items:center;gap:11px;min-width:0;}
+  .token-rank{width:16px;flex-shrink:0;text-align:center;font-size:11px;font-weight:600;color:var(--text-muted);}
+  .row.pending .token-rank{color:var(--text-muted);}
+  .token-icon{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#0a0a0c;flex-shrink:0;object-fit:cover;}
+  .token-meta{min-width:0;}
+  .token-symbol{font-size:13.5px;font-weight:600;}
+  .token-name{font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px;}
+  .row-right{text-align:right;flex-shrink:0;}
+  .token-price{font-size:13.5px;font-weight:600;}
+  .token-sub-row{display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:2px;}
+  .token-usd{font-size:11px;color:var(--text-secondary);}
+  .token-change{font-size:11px;}
+  .row.pending .token-price, .row.pending .token-change, .row.pending .token-usd{color:var(--text-muted);}
+  .row.failed .token-price{color:var(--text-muted);}
+
+  .empty,.loading{text-align:center;padding:40px 10px;color:var(--text-muted);font-size:13px;}
+
+  /* ===== BASE PICKER OVERLAY ===== */
+  .picker-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;z-index:1000;}
+  .picker-overlay.open{display:flex;}
+  .picker-sheet{width:100%;max-width:430px;max-height:78vh;background:var(--surface-1);border:1px solid var(--border);border-top-left-radius:var(--radius-lg);border-top-right-radius:var(--radius-lg);display:flex;flex-direction:column;overflow:hidden;}
+  .picker-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 10px;}
+  .picker-title{font-size:15px;font-weight:600;}
+  .picker-close{width:28px;height:28px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-secondary);cursor:pointer;flex-shrink:0;}
+  .picker-search{margin:0 18px 10px;}
+  .picker-list{overflow-y:auto;padding:0 10px 18px;}
+  .picker-item{display:flex;align-items:center;gap:11px;padding:10px 8px;border-radius:12px;cursor:pointer;}
+  .picker-item:active{background:var(--surface-2);}
+  .picker-item.selected{background:var(--surface-3);}
+  .picker-item img{width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;}
+  .picker-item-meta{min-width:0;flex:1;}
+  .picker-item-symbol{font-size:13.5px;font-weight:600;}
+  .picker-item-name{font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .picker-item-check{color:var(--amber);flex-shrink:0;}
+</style>
+</head>
+<body>
+
+<div class="screen">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark"><img src="img/sda.png" alt="SDA" onerror="this.parentElement.textContent='S'"></div>
+      <div>
+        <div class="brand-name">Sidra DEX Live</div>
+        <div class="brand-sub"><span class="dot" id="statusDot"></span><span id="statusText">Connecting...</span></div>
+      </div>
+    </div>
+    <div class="icon-btn" id="refreshBtn" role="button" aria-label="Rescan" onclick="AGG_PRICE.rescan()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    </div>
+  </div>
+
+  <div class="banner">
+    <div class="banner-label" id="baseLabel">1 SDA</div>
+    <div class="banner-row">
+      <div>
+        <div class="banner-price num" id="basePrice">—</div>
+        <div class="banner-change flat" id="baseChange">Loading price...</div>
+      </div>
+    </div>
+    <div class="base-chip" id="baseChipBtn" role="button" onclick="openBasePicker()">
+      <span class="swatch"><img id="baseChipIcon" src="img/sda.png" alt="" onerror="this.style.display='none'"></span>
+      <span>Base pair: <b id="baseChipSymbol">SDA</b></span>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-left:2px;"><path d="m6 9 6 6 6-6"/></svg>
+    </div>
+    <div class="banner-note" id="baseNote">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <span>SDA/USD is a manual price — it'll switch to live once Sidra DEX has a stablecoin pool. Token rates below are already live on-chain.</span>
+    </div>
+  </div>
+
+  <div class="progress-wrap" id="progressWrap" style="display:none;">
+    <div class="progress-row">
+      <span id="progressLabel">Scanning 0 / 0</span>
+      <span id="progressPct">0%</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-actions">
+      <button id="stopScanBtn" class="danger" onclick="AGG_PRICE.stopScan()">Stop scan</button>
+    </div>
+  </div>
+
+  <div class="search">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+    <input type="text" id="searchInput" placeholder="Search token, e.g. FREEt" oninput="renderList()">
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-filter="all" onclick="setFilter('all',this)">All</div>
+    <div class="tab" data-filter="gainers" onclick="setFilter('gainers',this)">Gainers</div>
+    <div class="tab" data-filter="losers" onclick="setFilter('losers',this)">Losers</div>
+  </div>
+
+  <div class="list-head">
+    <span>Token</span>
+    <span id="sortToggle" onclick="toggleSort()">Price (USD) ⇅</span>
+  </div>
+
+  <div class="list" id="list"></div>
+  <div class="empty" id="emptyState" style="display:none;">No tokens found.</div>
+
+</div>
+
+<!-- Bottom nav is intentionally NOT included here — this page will
+     later be mounted as one of the tabs in the main app's own
+     bottom nav (see js/bottom-nav.js & <nav class="bottom-nav"
+     id="bottomNav"> in the real project), so no duplicate nav here. -->
+
+<!-- ===== BASE PICKER — choose which token is the base pair (SDA, FREEt, etc.) ===== -->
+<div class="picker-overlay" id="basePickerOverlay" onclick="if(event.target===this) closeBasePicker()">
+  <div class="picker-sheet">
+    <div class="picker-head">
+      <div class="picker-title">Select Base Pair</div>
+      <div class="picker-close" onclick="closeBasePicker()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </div>
+    </div>
+    <div class="search picker-search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" id="basePickerSearch" placeholder="Search base token..." oninput="renderBasePicker()">
+    </div>
+    <div class="picker-list" id="basePickerList"></div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   TOKEN DATA — loaded DIRECTLY from data/tokens.json, no more
+   hardcoded/embedded list. This file uses the SAME source as
+   the main wallet (see js/tokens.js -> loadDefaultTokens), so
+   adding/editing a token in data/tokens.json automatically
+   updates this price list too, no edits needed here.
+
+   Minimum shape per item:
+   { "symbol": "FREEt", "name": "Freelancium", "type": "erc20",
+     "address": "0x...", "decimals": 18, "icon": "freet.png" }
+
+   "icon" is just the filename (no "img/" prefix) — same as in
+   the main project's tokens.json, since the "img/" path is
+   prepended at render time (see renderList()).
+   ========================================================= */
+
+async function loadTokenList() {
+  try {
+    const res = await fetch("data/tokens.json");
+    if (!res.ok) throw new Error("HTTP status " + res.status);
+    const data = await res.json();
+    if (!Array.isArray(data) || !data.length) {
+      throw new Error("data/tokens.json is empty or not an array");
+    }
+    return data;
+  } catch (e) {
+    console.error("[price-scan] Failed to load data/tokens.json:", e.message);
+    setStatus("Failed to load token list", false);
+    const empty = document.getElementById("emptyState");
+    empty.style.display = "block";
+    empty.textContent = "Failed to load data/tokens.json. Make sure the file is available at the same path as the main project.";
+    return [];
+  }
+}
+
+/* =========================================================
+   LOCAL PRICE HISTORY (for 24h %)
+   PRICE_ENGINE doesn't store history — this is a device-local
+   snapshot.
+   ========================================================= */
+const HISTORY_PREFIX = "sdaEx_priceHistory_";
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function recordSnapshot(symbol, price) {
+  const key = HISTORY_PREFIX + symbol;
+  const now = Date.now();
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem(key) || "[]"); } catch { history = []; }
+  history.push({ t: now, p: price });
+  history = history.filter(h => now - h.t < DAY_MS * 2);
+  try { localStorage.setItem(key, JSON.stringify(history)); } catch {}
+  return history;
+}
+
+function get24hChange(history, currentPrice) {
+  if (!history || !history.length || !currentPrice) return null;
+  const target = Date.now() - DAY_MS;
+  let ref = null;
+  for (const h of history) if (h.t <= target) ref = h;
+  if (!ref || !ref.p) return null;
+  return ((currentPrice - ref.p) / ref.p) * 100;
+}
+
+/* =========================================================
+   AGG_PRICE — fast batch scanner, same pattern as AGGREGATOR
+   (Promise.all per batch + delay between batches), but only
+   1 RPC call per token (not 4) and no liquidity check, since
+   this is a price list, not a swap execution.
+   ========================================================= */
+const AGG_PRICE = (() => {
+
+  const BATCH_SIZE   = 8;     // tokens processed concurrently per batch
+  const BATCH_DELAY  = 150;   // ms delay between batches — enough to not get public RPC blocked
+  const SCAN_TIMEOUT = 6000;  // ms — slow tokens are skipped, not holding up the whole scan
+
+  let _scanning = false;
+  let _stopRequested = false;
+
+  function withTimeout(p, ms) {
+    return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+  }
+
+  function setProgress(done, total) {
+    const wrap = document.getElementById("progressWrap");
+    const label = document.getElementById("progressLabel");
+    const pct = document.getElementById("progressPct");
+    const fill = document.getElementById("progressFill");
+    if (done === null) {
+      wrap.style.display = "none";
+      return;
+    }
+    wrap.style.display = "block";
+    const p = total > 0 ? Math.round((done / total) * 100) : 0;
+    label.textContent = `Scanning ${done} / ${total}`;
+    pct.textContent = p + "%";
+    fill.style.width = p + "%";
+  }
+
+  async function scanAll() {
+    if (_scanning) return;
+    if (typeof PRICE_ENGINE === "undefined" || typeof PRICE_ENGINE.getAmountOut !== "function") {
+      setStatus("PRICE_ENGINE not found", false);
+      document.getElementById("emptyState").style.display = "block";
+      document.getElementById("emptyState").textContent =
+        "PRICE_ENGINE.getAmountOut is missing. Check the <script> order in <head>.";
+      return;
+    }
+    if (typeof TOKEN_PRICE_USD === "undefined") {
+      setStatus("balance.js not found", false);
+      return;
+    }
+
+    _scanning = true;
+    _stopRequested = false;
+    document.getElementById("statusDot").className = "dot busy";
+    document.getElementById("statusText").textContent = "Scanning...";
+    document.getElementById("refreshBtn").classList.add("spin");
+    document.getElementById("stopScanBtn").style.display = "inline-block";
+
+    const allTokens = await loadTokenList();
+
+    if (!allTokens.length) {
+      // loadTokenList already shows the error message in emptyState
+      _scanning = false;
+      document.getElementById("statusDot").className = "dot off";
+      document.getElementById("refreshBtn").classList.remove("spin");
+      document.getElementById("stopScanBtn").style.display = "none";
+      setProgress(null);
+      return;
+    }
+
+    window.TOKENS = allTokens;
+
+    // Candidate tokens to show/scan: native SDA + all ERC20s (including
+    // WSDA — now handled the same as any other token through
+    // PRICE_ENGINE instead of being hardcoded, so its rate stays correct
+    // even when the base pair is switched to a token other than SDA).
+    const candidates = [
+      { symbol: "SDA", name: "Sidra Digital Asset", icon: "sda.png", address: "native" },
+      ...allTokens.filter(t => t.type === "erc20")
+    ];
+
+    const base = state.base; // { address, symbol, name, icon }
+
+    // IMPORTANT: WSDA has no direct pool against "native" — WSDA IS the
+    // on-chain wrapped representation of SDA (not a separate trading
+    // pair), and every token/SDA pool is actually a token/WSDA pool
+    // under the hood (see normalize() in factory-engine.js). So WSDA
+    // must be treated exactly like "native" for every PRICE_ENGINE
+    // query, otherwise it would try to hit a WSDA/WSDA pool that never
+    // exists (always returning 0 / "no route" if not skipped like this).
+    const isNativeLike = (t) => t.address === "native" || t.symbol === "WSDA";
+    const engineAddr   = (t) => isNativeLike(t) ? "native" : t.address;
+
+    const isBaseNative = isNativeLike(base);
+    const baseEngineAddr = engineAddr(base);
+    const baseAddrLower = base.address.toLowerCase();
+
+    // The token currently set as the base is not shown as a row (rate would trivially be 1:1)
+    const list = candidates.filter(t => t.address.toLowerCase() !== baseAddrLower);
+
+    const sdaPrice = TOKEN_PRICE_USD["SDA"] || 0;
+
+    // USD price of the base pair itself (used for the "1 {BASE} = $..." banner)
+    let baseUsdPrice = sdaPrice;
+    if (!isBaseNative) {
+      try {
+        const baseNativeRatio = await withTimeout(PRICE_ENGINE.getPrice(baseEngineAddr, "native"), SCAN_TIMEOUT);
+        baseUsdPrice = baseNativeRatio > 0 ? baseNativeRatio * sdaPrice : 0;
+      } catch { baseUsdPrice = 0; }
+    }
+    const baseHist = recordSnapshot("base_" + base.symbol, baseUsdPrice);
+    updateBaseBanner(baseUsdPrice, get24hChange(baseHist, baseUsdPrice));
+
+    // All rows start "pending" — rendered right away so the list looks
+    // full from the start, then filled in one by one as each batch finishes
+    state.rows = list.map(t => ({
+      address: t.address, symbol: t.symbol, name: t.name, icon: t.icon,
+      rate: null, usdPrice: null, change: null, pending: true
+    }));
+    renderList();
+
+    let done = 0;
+    setProgress(done, list.length);
+
+    for (let i = 0; i < list.length; i += BATCH_SIZE) {
+      if (_stopRequested) break;
+
+      const batch = list.slice(i, i + BATCH_SIZE);
+
+      await Promise.all(batch.map(async (t) => {
+        const row = state.rows.find(r => r.address === t.address);
+        try {
+          const tokenIsNativeLike = isNativeLike(t);
+          const tokenEngineAddr = engineAddr(t);
+
+          // Rate vs SDA — always computed, used for the USD column & sorting,
+          // regardless of the active base pair. WSDA/SDA itself = 1, no RPC needed.
+          const nativeRatioPromise = tokenIsNativeLike
+            ? Promise.resolve(1)
+            : withTimeout(PRICE_ENGINE.getPrice(tokenEngineAddr, "native"), SCAN_TIMEOUT);
+
+          // Rate vs the currently active base pair — if the base is
+          // SDA/WSDA, just reuse nativeRatio (saves 1 RPC call & avoids
+          // the nonexistent WSDA/WSDA pool). If the base is another
+          // token, PRICE_ENGINE already multihops via WSDA automatically.
+          const baseRatioPromise = isBaseNative
+            ? (tokenIsNativeLike ? Promise.resolve(1) : nativeRatioPromise)
+            : withTimeout(PRICE_ENGINE.getPrice(tokenEngineAddr, baseEngineAddr), SCAN_TIMEOUT);
+
+          const [nativeRatio, baseRatio] = await Promise.all([nativeRatioPromise, baseRatioPromise]);
+
+          if (nativeRatio > 0 && row) {
+            const usdPrice = nativeRatio * sdaPrice;
+            const hist = recordSnapshot(t.symbol, usdPrice);
+            row.usdPrice = usdPrice;
+            row.change = get24hChange(hist, usdPrice);
+            row.rate = baseRatio > 0 ? baseRatio : null;
+            row.pending = false;
+            row.failed = !(baseRatio > 0);
+          } else if (row) {
+            row.pending = false;
+            row.failed = true;
+          }
+        } catch (e) {
+          if (row) { row.pending = false; row.failed = true; }
+        }
+      }));
+
+      done = Math.min(i + BATCH_SIZE, list.length);
+      setProgress(done, list.length);
+      renderList();
+
+      if (!_stopRequested && i + BATCH_SIZE < list.length) {
+        await new Promise(r => setTimeout(r, BATCH_DELAY));
+      }
+    }
+
+    _scanning = false;
+    document.getElementById("refreshBtn").classList.remove("spin");
+    document.getElementById("stopScanBtn").style.display = "none";
+    setProgress(null);
+
+    if (_stopRequested) {
+      setStatus("Scan stopped — partial results kept", false);
+    } else {
+      setStatus("Live · Sidra Chain", true);
+    }
+    renderList();
+  }
+
+  function stopScan() {
+    if (!_scanning) return;
+    _stopRequested = true;
+  }
+
+  function rescan() {
+    if (_scanning) { stopScan(); return; }
+    scanAll();
+  }
+
+  // Used when switching the base pair: if an old scan is still running,
+  // request it to stop and wait until it has truly finished before
+  // starting a new one — so two scans don't both write to state.rows
+  // at the same time.
+  function restart() {
+    _stopRequested = true;
+    const wait = () => {
+      if (_scanning) { setTimeout(wait, 100); return; }
+      scanAll();
+    };
+    wait();
+  }
+
+  return { scanAll, stopScan, rescan, restart };
+})();
+
+/* =========================================================
+   STATE + RENDER
+   ========================================================= */
+let state = {
+  filter: "all",
+  sortDir: "desc",
+  rows: [],
+  base: { address: "native", symbol: "SDA", name: "Sidra Digital Asset", icon: "sda.png" }
+};
+
+function fmtUsd(n){
+  if (n === null || n === undefined) return "…";
+  return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: n < 1 ? 6 : 2 });
+}
+
+function setStatus(text, ok){
+  document.getElementById("statusText").textContent = text;
+  document.getElementById("statusDot").className = "dot" + (ok ? "" : " off");
+}
+
+function fmtRate(n, symbol){
+  if (n === null || n === undefined) return "…";
+  const decimals = n === 0 ? 2 : n < 0.001 ? 8 : n < 1 ? 6 : n < 1000 ? 4 : 2;
+  return n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: decimals }) + " " + symbol;
+}
+
+function updateBaseBanner(baseUsdPrice, baseChange){
+  document.getElementById("baseLabel").textContent = "1 " + state.base.symbol;
+  document.getElementById("basePrice").textContent = fmtUsd(baseUsdPrice);
+  document.getElementById("baseChipSymbol").textContent = state.base.symbol;
+  document.getElementById("baseChipIcon").src = "img/" + (state.base.icon || "default.png");
+  document.getElementById("baseChipIcon").style.display = "";
+
+  const el = document.getElementById("baseChange");
+  if (baseChange === null) {
+    el.textContent = "waiting for 24h data";
+    el.className = "banner-change flat";
+  } else {
+    el.textContent = (baseChange >= 0 ? "↑ " : "↓ ") + Math.abs(baseChange).toFixed(2) + "% · 24h";
+    el.className = "banner-change " + (baseChange >= 0 ? "up" : "down");
+  }
+}
+
+function setFilter(f, el){
+  state.filter = f;
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  el.classList.add("active");
+  renderList();
+}
+
+function toggleSort(){
+  state.sortDir = state.sortDir === "desc" ? "asc" : "desc";
+  document.getElementById("sortToggle").textContent = "Price (USD) " + (state.sortDir === "desc" ? "↓" : "↑");
+  renderList();
+}
+
+function renderList(){
+  const q = document.getElementById("searchInput").value.trim().toLowerCase();
+  let rows = state.rows.slice();
+
+  if (q) rows = rows.filter(t => t.symbol.toLowerCase().includes(q) || t.name.toLowerCase().includes(q));
+  if (state.filter === "gainers") rows = rows.filter(t => t.change !== null && t.change > 0);
+  if (state.filter === "losers") rows = rows.filter(t => t.change !== null && t.change < 0);
+
+  rows.sort((a,b) => {
+    const av = a.usdPrice ?? -1, bv = b.usdPrice ?? -1;
+    return state.sortDir === "desc" ? bv - av : av - bv;
+  });
+
+  const list = document.getElementById("list");
+  const empty = document.getElementById("emptyState");
+  list.innerHTML = "";
+
+  if (!rows.length){
+    empty.style.display = "block";
+    if (q) {
+      empty.textContent = "No tokens found.";
+    } else if (state.filter === "gainers" || state.filter === "losers") {
+      const hasAnyHistory = state.rows.some(r => r.change !== null);
+      empty.textContent = hasAnyHistory
+        ? "No tokens matching this filter right now."
+        : "No 24h price history yet — this fills in automatically once the page has been scanning for at least 24 hours.";
+    } else {
+      empty.textContent = "No tokens found.";
+    }
+    return;
+  }
+  empty.style.display = "none";
+
+  rows.forEach((t, idx) => {
+    const up = t.change === null ? null : t.change >= 0;
+    const changeClass = up === null ? "flat" : (up ? "up" : "down");
+    const changeText = t.pending ? "…" : t.failed ? "no route" :
+      t.change === null ? "waiting 24h" : (up ? "↑ " : "↓ ") + Math.abs(t.change).toFixed(1) + "%";
+
+    // Icon path matches the main project: img/ folder, not assets/icons/.
+    // If the "icon" field is empty, fall back to img/default.png first
+    // before finally falling back to a colored initial avatar (onerror below).
+    const iconFile = t.icon || "default.png";
+
+    const rateText = t.pending ? "…" : t.failed || t.rate === null ? "no route" : fmtRate(t.rate, state.base.symbol);
+    const usdText  = t.pending ? "" : t.failed ? "" : fmtUsd(t.usdPrice);
+
+    const row = document.createElement("div");
+    row.className = "row" + (t.pending ? " pending" : "") + (t.failed ? " failed" : "");
+    row.onclick = () => openToken(t.symbol);
+    row.innerHTML = `
+      <div class="row-left">
+        <div class="token-rank">${idx + 1}</div>
+        <img class="token-icon" src="img/${iconFile}" alt=""
+             onerror="this.onerror=null; if(this.src.indexOf('default.png')===-1){this.src='img/default.png';} else {this.replaceWith(Object.assign(document.createElement('div'),{className:'token-icon',textContent:'${t.symbol.slice(0,2).toUpperCase()}',style:'background:${colorFor(t.symbol)}'}));}">
+        <div class="token-meta">
+          <div class="token-symbol">${t.symbol}<span style="color:var(--text-muted); font-weight:400;"> / ${state.base.symbol}</span></div>
+          <div class="token-name">${t.name}</div>
+        </div>
+      </div>
+      <div class="row-right">
+        <div class="token-price num">${rateText}</div>
+        <div class="token-sub-row">
+          ${usdText ? `<span class="token-usd num">${usdText}</span>` : ""}
+          <span class="token-change ${changeClass}">${changeText}</span>
+        </div>
+      </div>`;
+    list.appendChild(row);
+  });
+}
+
+function colorFor(sym){
+  const palette = ["#f5a623","#6c5ce7","#3ecf8e","#e5645f","#4fa3e3","#e29be0"];
+  let h = 0;
+  for (let i=0;i<sym.length;i++) h = (h*31 + sym.charCodeAt(i)) % palette.length;
+  return palette[h];
+}
+
+function openToken(symbol){
+  if (typeof window.openTokenDetail === "function") window.openTokenDetail(symbol);
+  else console.log("Open token detail:", symbol);
+}
+
+/* =========================================================
+   BASE PICKER — switch the base pair (e.g. SDA -> FREEt), then
+   trigger a rescan so every rate is recomputed relative to the
+   new base via PRICE_ENGINE.getPrice (auto-multihops via WSDA
+   when there's no direct pool).
+   ========================================================= */
+function _basePickerCandidates(){
+  const all = window.TOKENS || [];
+  return [
+    { symbol: "SDA", name: "Sidra Digital Asset", icon: "sda.png", address: "native" },
+    ...all.filter(t => t.type === "erc20")
+  ];
+}
+
+function openBasePicker(){
+  document.getElementById("basePickerSearch").value = "";
+  renderBasePicker();
+  document.getElementById("basePickerOverlay").classList.add("open");
+}
+
+function closeBasePicker(){
+  document.getElementById("basePickerOverlay").classList.remove("open");
+}
+
+function renderBasePicker(){
+  const q = document.getElementById("basePickerSearch").value.trim().toLowerCase();
+  const listEl = document.getElementById("basePickerList");
+  let items = _basePickerCandidates();
+
+  if (q) items = items.filter(t => t.symbol.toLowerCase().includes(q) || (t.name || "").toLowerCase().includes(q));
+
+  listEl.innerHTML = "";
+
+  if (!items.length){
+    listEl.innerHTML = `<div class="empty">No tokens found.</div>`;
+    return;
+  }
+
+  items.forEach(t => {
+    const isSelected = t.address.toLowerCase() === state.base.address.toLowerCase();
+    const iconFile = t.icon || "default.png";
+
+    const el = document.createElement("div");
+    el.className = "picker-item" + (isSelected ? " selected" : "");
+    el.onclick = () => selectBase(t);
+    el.innerHTML = `
+      <img src="img/${iconFile}" alt=""
+           onerror="this.onerror=null; if(this.src.indexOf('default.png')===-1){this.src='img/default.png';}">
+      <div class="picker-item-meta">
+        <div class="picker-item-symbol">${t.symbol}</div>
+        <div class="picker-item-name">${t.name || ""}</div>
+      </div>
+      ${isSelected ? `<svg class="picker-item-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>` : ""}
+    `;
+    listEl.appendChild(el);
+  });
+}
+
+function selectBase(t){
+  if (t.address.toLowerCase() === state.base.address.toLowerCase()) {
+    closeBasePicker();
+    return;
+  }
+  state.base = { address: t.address, symbol: t.symbol, name: t.name, icon: t.icon || "default.png" };
+  closeBasePicker();
+  AGG_PRICE.restart();
+}
+
+document.addEventListener("DOMContentLoaded", () => AGG_PRICE.scanAll());
+</script>
+</body>
+</html>
