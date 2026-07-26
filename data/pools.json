@@ -1,0 +1,512 @@
+[
+  {
+    "symbol": "FREEt",
+    "token": "0x0914BF761Af71F4A39DcE0E9ce71B7ed96c457E3",
+    "pool": "0x526d91Cd3078433d4370e12A592996B87EE44567",
+    "fee": 500
+  },
+  {
+    "symbol": "GLNs",
+    "token": "0xE1a8FfD7280D5A278A9E8c6daFf6d391b59081B4",
+    "pool": "0x8D4cAeb31c5ED58Ffd16345F5F1BFEc4e6FA1791",
+    "fee": 500
+  },
+  {
+    "symbol": "SDS",
+    "token": "0x9bA4035871119991fC7B420873345f9be92aF146",
+    "pool": "0xDdf80B185B3fE5de80b35159E8496973B8e2dc8B",
+    "fee": 500
+  },
+  {
+    "symbol": "FBAY",
+    "token": "0x3Acd3c10d4C080ace3662153913833081684cBB8",
+    "pool": "0xcA7965eEAa824362525D1BEA43450b425DaA5c6D",
+    "fee": 500
+  },
+  {
+    "symbol": "SMAf",
+    "token": "0x2cE9e7c168035D61cc3a3655949C147c063EeCc4",
+    "pool": "0xa22fB6E8dE7c9Bd25B762676e5Ae858116E894F9",
+    "fee": 500
+  },
+  {
+    "symbol": "AIR",
+    "token": "0x4cE5ef02F9aEbb80BB4e327F76DFb95eac1B69A6",
+    "pool": "0x6685bBD1BB70a4f182458b745ee28425a68ad05f",
+    "fee": 500
+  },
+  {
+    "symbol": "ARMS",
+    "token": "0x9B61324f0beE10f4624FE6E75c60943b73125e81",
+    "pool": "0x07046106bAaA7CBbEe8Aba60Ed0454dF374f857f",
+    "fee": 500
+  },
+  {
+    "symbol": "HEC",
+    "token": "0xBCdA8739687C12EEc3206d8AEC80c32a3C545Ae9",
+    "pool": "0x4E49C2C789CE0cFB32934B8ebe030425c973D6bc",
+    "fee": 500
+  },
+  {
+    "symbol": "REGS",
+    "token": "0x2d74B8846Ffe9442B158A6767199a47c0e655038",
+    "pool": "0x86d498d170A389bBcBD641E9a75FB6cd2Aa653c5",
+    "fee": 500
+  },
+  {
+    "symbol": "EWM",
+    "token": "0x3BDC0adbA5ac8F68b977266ef308243443886CEa",
+    "pool": "0xd9De33e6F851Df0c74Cf5FE383737A90FE2aF3a7",
+    "fee": 500
+  },
+  {
+    "symbol": "VPA",
+    "token": "0x983428b824D8462De6240bA19e790Bbf19703f33",
+    "pool": "0x082A098Ad65354c243B04E880761C26E25CBbF72",
+    "fee": 500
+  },
+  {
+    "symbol": "GPC",
+    "token": "0xd0981E59c8B51778A3b7754298614820CF08C17B",
+    "pool": "0xBBE87640861286E39272070F1D279135EefE838F",
+    "fee": 500
+  },
+  {
+    "symbol": "ZSM",
+    "token": "0x828Df8009adD5279b9133c39955eE95bdCAAE476",
+    "pool": "0xa9A40D3abF7072ae4c7D1909CF6Cd34168ae8259",
+    "fee": 500
+  },
+  {
+    "symbol": "SIT",
+    "token": "0xF102009Cd862Fc714e01c46591c3DF10D097f7B9",
+    "pool": "0x98fE0B3D55Ec8436dC09be01DBf918636B42395B",
+    "fee": 500
+  },
+  {
+    "symbol": "STSX",
+    "token": "0x84Fb6Ad958a73a9e978C2bf00719b84D8b73304A",
+    "pool": "0x6Ec4f5D382e2a4B4bFe498DD985CF564256d0B5C",
+    "fee": 500
+  },
+  {
+    "symbol": "WPX",
+    "token": "0xfaeCbE5956a02e45Ee663922174F955ae78D0309",
+    "pool": "0x6f93b12D320E2CaC5330b27b61c1665e01F72cbC",
+    "fee": 500
+  },
+  {
+    "symbol": "SLND",
+    "token": "0x91210544fF2218c2670693682B53d6362b9915eF",
+    "pool": "0xB34574786daDD327742Bd0A2aB855371280119ad",
+    "fee": 500
+  },
+  {
+    "symbol": "DBI",
+    "token": "0xf94a744807da1e4F933C3D31e1d93A0A026fD21d",
+    "pool": "0xB739Fe9DbCDE6452D78DdAF218158e587CC39E9a",
+    "fee": 500
+  },
+  {
+    "symbol": "SKMH",
+    "token": "0xe787BfFC078A0231a038Be1Fb199B9c6FD1d511a",
+    "pool": "0x10957d769b8B38Ba32f0236502193838E4480e16",
+    "fee": 500
+  },
+  {
+    "symbol": "QSM",
+    "token": "0x430a8eeff93380FC1F1239d5f7f5D82c79f52858",
+    "pool": "0x6fBEC0d1630CA255701c1f6d0975c2499567e74d",
+    "fee": 500
+  },
+  {
+    "symbol": "MBF",
+    "token": "0xF74106911432657a24b0D85257d40F24f801cc01",
+    "pool": "0x7E5b98B0c3E763c801d0539e88Deac47508BaF22",
+    "fee": 500
+  },
+  {
+    "symbol": "SGWA",
+    "token": "0x940692728873F93B5ECEabB373871ddEF5910312",
+    "pool": "0x277D22e0478451b139E632c9143155FC68cBa451",
+    "fee": 500
+  },
+  {
+    "symbol": "VLCP",
+    "token": "0xE7C1F17Cc6aC5CEB7f763DcE84310D2c26bDF927",
+    "pool": "0x4da744DFb9484c5C9eA263A875b27b0Ce19aCB09",
+    "fee": 500
+  },
+  {
+    "symbol": "VPD",
+    "token": "0x345B20D4fca08376f19145C36c531A1821AF96c4",
+    "pool": "0x00e1A9649BA5BE7Fe712b5e34a1B30a312a61265",
+    "fee": 500
+  },
+  {
+    "symbol": "IDM",
+    "token": "0x4Ae77f557c5aAcA450EeC79B929b5Cd06A8b8e6d",
+    "pool": "0x166810b7d5056FedDB041B16F187Dc482d6Edc77",
+    "fee": 500
+  },
+  {
+    "symbol": "LNH",
+    "token": "0xcb13385a82565E2090B9275e49C5CBbdB1875aEA",
+    "pool": "0x3f31BB70A3B44B7c5E789FaC6d42dBeaA9cbc571",
+    "fee": 500
+  },
+  {
+    "symbol": "TRL",
+    "token": "0xe077af3aE012cAa3eD975Eb1006b62090FaA2942",
+    "pool": "0x658E5745C4671950e28AFe6a28B946d7B37357e6",
+    "fee": 500
+  },
+  {
+    "symbol": "SFAR",
+    "token": "0x641a328505134b16A2B385670a0062E911871Df5",
+    "pool": "0xE5634982e0e6fA659f2F17578f706b3721766aCf",
+    "fee": 500
+  },
+  {
+    "symbol": "DAN",
+    "token": "0xb0040F8B957329BFB2615dC081c1666540A153Bd",
+    "pool": "0x576964927DF0Bc99884BA5CB09906B8d88ed3647",
+    "fee": 500
+  },
+  {
+    "symbol": "VMB",
+    "token": "0xe2f49f86C02E627b2e86809424737b79b2651B8c",
+    "pool": "0x6e2AF42d1388C3898Ec782A23926D589C508190f",
+    "fee": 500
+  },
+  {
+    "symbol": "SUBV",
+    "token": "0x0DDC0c44251a98747b9e7dc165FDE86257876F79",
+    "pool": "0x38A37F24E2fD61ae0481644025672fd946Df223e",
+    "fee": 500
+  },
+  {
+    "symbol": "DIIGE",
+    "token": "0x4Ed722Fbc1DE078d3bd27588fc92f0cf7113BD63",
+    "pool": "0x08d405d217499E28c464923EF7927E274fFb2E6d",
+    "fee": 500
+  },
+  {
+    "symbol": "ECSDA",
+    "token": "0xb6f440A059d24cA305BcE6F25115d09E9dbeA653",
+    "pool": "0x80530c3a2dF36b1d23679D2033d0FB23D1b1AA32",
+    "fee": 500
+  },
+  {
+    "symbol": "SDFL",
+    "token": "0x63Ec72E6A6D6B4f8725c76BD279Bee162663b75B",
+    "pool": "0x691cec4dBc1105Cd0b5Cf58B81f8C5a2E1820D14",
+    "fee": 500
+  },
+  {
+    "symbol": "TAP",
+    "token": "0x2b78034DBEA0cE70e662c9aA238db5CAF3CfE28F",
+    "pool": "0xC87d8A6AD66395281412DeFef30354326136Fd25",
+    "fee": 500
+  },
+  {
+    "symbol": "IFC",
+    "token": "0xb8d7fb85c4BF32f418715Dcb9eBF88107eE73CB7",
+    "pool": "0x76aAd3C7d96310A5dEFb3c44D054BE6dBD9dd701",
+    "fee": 500
+  },
+  {
+    "symbol": "AITT",
+    "token": "0xaAADd5D2BB88fBdaa426fFdb95b917B861fe94bB",
+    "pool": "0x9A4439FA043C2Cfe37cEA47b5dCfb101addF1867",
+    "fee": 500
+  },
+  {
+    "symbol": "CSF",
+    "token": "0x49c27873E134A62231C8867f7f5d6b9ebfd7AA78",
+    "pool": "0xACe24317854D2eAa7078E3eA4A0d97e564b3B299",
+    "fee": 500
+  },
+  {
+    "symbol": "GSML",
+    "token": "0x09F0b54101e08607A9e5E4C956A9b47Ef5fb24DB",
+    "pool": "0x69Ce0f47b405ea5e8A0F6D4580d478FAb812c3cD",
+    "fee": 500
+  },
+  {
+    "symbol": "GACP",
+    "token": "0x99c03AF034e5b471ADb0536be65632B12492f991",
+    "pool": "0xfaFAFBfbb5A5BBb113f2fD93161F51634986538a",
+    "fee": 500
+  },
+  {
+    "symbol": "AFRA",
+    "token": "0xe9d82898c3cc398209EebA10E806E94c480d22BA",
+    "pool": "0xfa3D5e002A705b6771C23E2cE0C39a38EA7F8653",
+    "fee": 500
+  },
+  {
+    "symbol": "VPM ecosystem",
+    "token": "0x4ACc2B052665b731182829178eB369797Ee44170",
+    "pool": "0xAD96d343ECa7568bc077f9556D354aA4a31fb72D",
+    "fee": 500
+  },
+  {
+    "symbol": "NGEC",
+    "token": "0x88a53e067A6D2be71248d7b660Ae72CC47F82d88",
+    "pool": "0x68A7647163eF99D6Ff147F7442E33a4e295B9E34",
+    "fee": 500
+  },
+  {
+    "symbol": "RIDEX",
+    "token": "0xeb96Cad0829C5c476f47eFf8de622d1984F0451E",
+    "pool": "0xdE2A9F1a6253E0fb8F6AE74271851a5bFEB9c485",
+    "fee": 500
+  },
+  {
+    "symbol": "SSET",
+    "token": "0xB74E6f176E25EBd3f7e948be85c47F52CcAf472F",
+    "pool": "0xA161c2aA44b9BD7B8Dbe5df27De25131A95Fecd1",
+    "fee": 500
+  },
+  {
+    "symbol": "ATES",
+    "token": "0x05322f2356e8FfdC28c4a5e69d4FEebEbbB33649",
+    "pool": "0xdb7387fe424C015C6ccE660b4c34eC60c10c3623",
+    "fee": 500
+  },
+  {
+    "symbol": "DMCS",
+    "token": "0x8F2E99691855a5663beb39dEB9075f28b3dcc51b",
+    "pool": "0xa9fc67e9e8709Deca98C60e82cCC37A25c75C695",
+    "fee": 500
+  },
+  {
+    "symbol": "HAQ",
+    "token": "0x04E0A7503c64eF7a143B92B60B471BAEdC81CAb9",
+    "pool": "0x40C2E8c885B2890562E8528Be6C9B85830bc04b6",
+    "fee": 500
+  },
+  {
+    "symbol": "AILP",
+    "token": "0xA80C9a3B7a92F181648209Cb98E1974d05cbe68f",
+    "pool": "0x7ea392183eb72705089080468DaCf4c6A5cad3A9",
+    "fee": 500
+  },
+  {
+    "symbol": "BZST",
+    "token": "0xf4A4f13821bA28Cba5Bc30a3965582a5339244ee",
+    "pool": "0x499415f604D645Ce2f84Cb64241e56052A18EE32",
+    "fee": 500
+  },
+  {
+    "symbol": "ALNS",
+    "token": "0xdc0EF76F3D82D275AaE268781a166C5Ea078C1b7",
+    "pool": "0xbef323aDb6146dA991E316373b722736125189CE",
+    "fee": 500
+  },
+  {
+    "symbol": "SDIP",
+    "token": "0x00313151A7e74CE5108ad12c1B444ed7b458947c",
+    "pool": "0x6EE5F24f8363F3C402bf26e0fE1E500bC4647057",
+    "fee": 500
+  },
+  {
+    "symbol": "DQLP",
+    "token": "0xA9272A802125C2b800e76F3232Ddca8fa8E81FaD",
+    "pool": "0xD92c18144A45498d0eeFB652942cb3F2839739AB",
+    "fee": 500
+  },
+  {
+    "symbol": "GTAP",
+    "token": "0x719A2D9a0DfAF65D15EF48C730C5F64c75d439ef",
+    "pool": "0x9476DE852271211A76422e84F102A59FCdf96256",
+    "fee": 500
+  },
+  {
+    "symbol": "SMRX",
+    "token": "0xFd88245B2294F833BD83245d4982c64f4B9D121D",
+    "pool": "0x94A43335f907fDD50E1377a8E83A0A6c540E1482",
+    "fee": 500
+  },
+  {
+    "symbol": "SAHBA",
+    "token": "0x482BE7b5c3C9Aa16B4e9967eD2c08bF1097Ae370",
+    "pool": "0xcF318b2E830Fd9ac73Ee6488236302E71E89b80B",
+    "fee": 500
+  },
+  {
+    "symbol": "DGPT",
+    "token": "0xC716D2D396298D061F4cbd78dc00590A2638e825",
+    "pool": "0xd9Ad95F325d45F87d139460a851F020D54C7D501",
+    "fee": 500
+  },
+  {
+    "symbol": "ACV",
+    "token": "0x1Dbb8336663198BFc18346Cfe8172Da722918284",
+    "pool": "0x2a25f26Cf238b4E7dBe9c0191CeB895C33e7584F",
+    "fee": 500
+  },
+  {
+    "symbol": "VPE",
+    "token": "0xFA562367f407791FfDeFc3c3a3370e28f5D4034d",
+    "pool": "0xF12744FEfB4CF5D87d656895c026712abb50Ec08",
+    "fee": 500
+  },
+  {
+    "symbol": "JSFT",
+    "token": "0xB4aC5dd62F700E271bffb52aeae1dba40135427f",
+    "pool": "0xb589E359d36A393e5c9d75eafB54C89A1553ce00",
+    "fee": 500
+  },
+  {
+    "symbol": "TKWF",
+    "token": "0x068E5B1C385ea2647008F1694a35AAb5DDe642F2",
+    "pool": "0xD156b66BF29e0c23b081641F8686EB4d604c5aB4",
+    "fee": 500
+  },
+  {
+    "symbol": "SGHC",
+    "token": "0xEEd87C64D1650A824F8589adcB76a13A692E2EA8",
+    "pool": "0xB6E50bCb3930e6709B924139e424F11cd356F7f5",
+    "fee": 500
+  },
+  {
+    "symbol": "AMHS",
+    "token": "0x75791A9C2703C300AF7716c19fbC2d3Aa1C87fA0",
+    "pool": "0xF6b27f2Ec781243240010C1b660103B3E4EDfF35",
+    "fee": 500
+  },
+  {
+    "symbol": "SSMI",
+    "token": "0x35CFA566301D239823e13A922116e55aEDb37D2D",
+    "pool": "0x72806D1FF69126ffAb4172D578ae3c3A258517B4",
+    "fee": 3000
+  },
+  {
+    "symbol": "FLT",
+    "token": "0x908dA7121a392CB929C3578bed9A1E5a6aD15939",
+    "pool": "0xD79ccb84527675A00228d21a055380702caAFFFf",
+    "fee": 500
+  },
+  {
+    "symbol": "DBN",
+    "token": "0x0d3eC7134AC8708A891773B35329555C24a3bAd6",
+    "pool": "0xd898fb8F18F953e4d0E248fc0F1446CFA1FE53E4",
+    "fee": 500
+  },
+  {
+    "symbol": "FEX",
+    "token": "0xf7a974534D87DA63E205F087Fb9b817c0322abB3",
+    "pool": "0xFcaFE6D161596c364a07Bb8F91aBF4Fb9F7188A2",
+    "fee": 500
+  },
+  {
+    "symbol": "IPT",
+    "token": "0xFaDd71e410A550E62fFb72d21ead0EB6f00091EF",
+    "pool": "0x672D904D62c73F7cA96D570aA6c25A0df24Fa018",
+    "fee": 500
+  },
+  {
+    "symbol": "XEN",
+    "token": "0x53167fF5810ff1886FC554E672994C232126383E",
+    "pool": "0xf263aa5112A7BFDb434417F4AEE67C1357Ae4B7E",
+    "fee": 500
+  },
+  {
+    "symbol": "TAMBN",
+    "token": "0x62BB34f84330075F0747623390F2c69A1B99749c",
+    "pool": "0xB897daA056f114398739e4E8319b7882230A90BC",
+    "fee": 500
+  },
+  {
+    "symbol": "BCS",
+    "token": "0x5a85c2009711fFAC7387d718eD4634c63144b7C2",
+    "pool": "0x83E8031302F0d859FaDa9786C54a5aD6afd8C11D",
+    "fee": 500
+  },
+  {
+    "symbol": "EZY",
+    "token": "0x71bF57a174156ebBc9c935A8490c1C4C1DBe6F00",
+    "pool": "0x5a10CA8A0C9E1FF9F89866b344FE858A60FeB9a5",
+    "fee": 500
+  },
+  {
+    "symbol": "SDO",
+    "token": "0xc1e3D68f2C214617c102313C9D23864e3eA1618f",
+    "pool": "0x83f5a171717CF9B6E52Bc561e9BFB486B906cA89",
+    "fee": 500
+  },
+  {
+    "symbol": "HLMR",
+    "token": "0xC0eFf0278BEF0931a03bC020bA3A51057C96b61C",
+    "pool": "0xE16258A45D2eBB9e6578f28e37149E3134754DA6",
+    "fee": 500
+  },
+  {
+    "symbol": "ONETK",
+    "token": "0x9694d371F566fCF6527c0F62e4f80553783ac7D7",
+    "pool": "0xf6C54564Fa87618F697A9251113566D192800aa4",
+    "fee": 500
+  },
+  {
+    "symbol": "SDX",
+    "token": "0x9d4Df8F0d3C294d8168D97455E947706fFdF8991",
+    "pool": "0xee624E4dA48DBE0C4247A818726fD43161ca36E1",
+    "fee": 500
+  },
+  {
+    "symbol": "PCH",
+    "token": "0xa1532A42406947949c91c6f796d43147856fb0Fc",
+    "pool": "0x936CDdDcE9012Eb514a5620c237E0E88666b22e4",
+    "fee": 500
+  },
+  {
+    "symbol": "BINV",
+    "token": "0xbE7360FE473E65a4AFee06c776440Ec2E807182f",
+    "pool": "0xB78b9876e13Eca7cE630588C5C57E33b3f74A236",
+    "fee": 500
+  },
+  {
+    "symbol": "AGFU",
+    "token": "0xFAa37C365fA4d345B5115edE02F1bf8A9e721B48",
+    "pool": "0xFee4af03335772a7606dFf1350741D35d4697eEb",
+    "fee": 500
+  },
+  {
+    "symbol": "HGM",
+    "token": "0x9393e3Cff4c010091BbF4De48F64417F0812BDbd",
+    "pool": "0xCB57561A57DFb5178f08eb391a745130B03f9BfB",
+    "fee": 500
+  },
+  {
+    "symbol": "IX",
+    "token": "0xD4F2DF7DcF040F19b3378aFb9Ab3E0A579288E4f",
+    "pool": "0xAafC01F8c03eEE4C3cd55af2be71ADF6A9D6aA0C",
+    "fee": 500
+  },
+  {
+    "symbol": "FARMT",
+    "token": "0x4197589f68F83c8283901bF8d4980db8d6bAe2d8",
+    "pool": "0x6758bF49F022AB2781d0EF9b7250496d634e1FA8",
+    "fee": 500
+  },
+  {
+    "symbol": "EMI",
+    "token": "0x0B148aaE364249be7dB935F33B7fe25A299228a6",
+    "pool": "0xB672472E6595a7A2d41C8077564b18b52314034A",
+    "fee": 3000
+  },
+  {
+    "symbol": "GDBN",
+    "token": "0xab839c76819a76cF2B5CaEF9E7B475F4b2898069",
+    "pool": "0xE8e1c332370CD064962253f794Cc57b493B47426",
+    "fee": 3000
+  },
+  {
+    "symbol": "SQS",
+    "token": "0xd493afBe6d17f5b6b99567c858cb8A2D16b0898a",
+    "pool": "0x47edcDD7402cEa1159475Dc2885eABa9bB059918",
+    "fee": 3000
+  }
+]
