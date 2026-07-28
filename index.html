@@ -601,8 +601,14 @@ let state = {
   filter: "all",
   sortDir: "desc",
   rows: [],
+  showNoRoute: false,
   base: { address: "native", symbol: "SDA", name: "Sidra Digital Asset", icon: "sda.png" }
 };
+
+function toggleNoRoute(){
+  state.showNoRoute = !state.showNoRoute;
+  renderList();
+}
 
 function fmtUsd(n){
   if (n === null || n === undefined) return "…";
@@ -655,6 +661,13 @@ function renderList(){
   const q = document.getElementById("searchInput").value.trim().toLowerCase();
   let rows = state.rows.slice();
 
+  // "no route" tokens (no pool found against the current base pair) are
+  // hidden by default — they clutter the list and there's nothing
+  // actionable to show for them. A small toggle at the bottom lets the
+  // user bring them back if they want to see which tokens have no pool.
+  const noRouteCount = rows.filter(t => t.failed).length;
+  if (!state.showNoRoute) rows = rows.filter(t => !t.failed);
+
   if (q) rows = rows.filter(t => t.symbol.toLowerCase().includes(q) || t.name.toLowerCase().includes(q));
   if (state.filter === "gainers") rows = rows.filter(t => t.change !== null && t.change.pct > 0);
   if (state.filter === "losers") rows = rows.filter(t => t.change !== null && t.change.pct < 0);
@@ -677,8 +690,20 @@ function renderList(){
       empty.textContent = hasAnyHistory
         ? "No tokens matching this filter right now."
         : "No price history yet — this fills in within a few minutes as the page keeps scanning.";
+    } else if (noRouteCount > 0 && !state.showNoRoute) {
+      empty.textContent = "All tokens currently have no route against this base pair.";
     } else {
       empty.textContent = "No tokens found.";
+    }
+
+    if (noRouteCount > 0 && !q) {
+      const footer = document.createElement("div");
+      footer.style.cssText = "text-align:center;padding:4px 4px 0;";
+      footer.innerHTML = `
+        <span style="font-size:11.5px;color:var(--text-muted);cursor:pointer;" onclick="toggleNoRoute()">
+          ${state.showNoRoute ? "Hide" : "Show"} ${noRouteCount} token${noRouteCount > 1 ? "s" : ""} with no route
+        </span>`;
+      list.appendChild(footer);
     }
     return;
   }
@@ -721,6 +746,16 @@ function renderList(){
       </div>`;
     list.appendChild(row);
   });
+
+  if (noRouteCount > 0) {
+    const footer = document.createElement("div");
+    footer.style.cssText = "text-align:center;padding:12px 4px;";
+    footer.innerHTML = `
+      <span style="font-size:11.5px;color:var(--text-muted);cursor:pointer;" onclick="toggleNoRoute()">
+        ${state.showNoRoute ? "Hide" : "Show"} ${noRouteCount} token${noRouteCount > 1 ? "s" : ""} with no route
+      </span>`;
+    list.appendChild(footer);
+  }
 }
 
 function colorFor(sym){
