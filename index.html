@@ -144,6 +144,24 @@
   .picker-item-symbol{font-size:13.5px;font-weight:600;}
   .picker-item-name{font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .picker-item-check{color:var(--amber);flex-shrink:0;}
+
+  /* ===== TOKEN DETAIL MODAL ===== */
+  .detail-price{font-size:26px;font-weight:600;letter-spacing:-.01em;margin-top:2px;}
+  .detail-sub{font-size:12px;color:var(--text-secondary);margin-bottom:18px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .detail-section{margin-bottom:16px;}
+  .detail-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px;}
+  .detail-address-row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;}
+  .detail-address-row span{font-family:monospace;font-size:11.5px;word-break:break-all;color:var(--text-secondary);line-height:1.4;}
+  .copy-btn{background:var(--surface-3);border:1px solid var(--border);border-radius:8px;padding:6px 11px;font-size:11px;font-weight:600;color:var(--text-primary);cursor:pointer;flex-shrink:0;}
+  .copy-btn:active{background:var(--surface-1);}
+  .liq-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .liq-box{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center;}
+  .liq-box .liq-val{font-size:13.5px;font-weight:600;}
+  .liq-box .liq-lbl{font-size:10.5px;color:var(--text-secondary);margin-top:3px;}
+  .detail-loading{font-size:12px;color:var(--text-muted);text-align:center;padding:16px 4px;}
+  .chart-wrap{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:8px 6px;}
+  .chart-wrap svg{width:100%;height:70px;display:block;}
+  .copy-toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:var(--surface-3);border:1px solid var(--border);color:var(--text-primary);font-size:12px;padding:8px 16px;border-radius:999px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:2000;}
 </style>
 </head>
 <body>
@@ -236,6 +254,34 @@
   </div>
 </div>
 
+<!-- ===== TOKEN DETAIL — contract address, price history sparkline, pool reserves.
+     Liquidity is fetched from PRICE_ENGINE.getPoolLiquidity(), which reuses the
+     SAME pool cache already warmed up by the main scan (see factory-engine.js
+     _poolDataCache) — so opening this right after a scan usually costs 0 extra
+     RPC calls, and even a cold fetch is still a single batched HTTP request,
+     not one call per value. ===== -->
+<div class="picker-overlay" id="tokenDetailOverlay" onclick="if(event.target===this) closeTokenDetail()">
+  <div class="picker-sheet" style="max-height:88vh;">
+    <div class="picker-head">
+      <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+        <img id="detailIcon" src="img/default.png" alt=""
+             style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;"
+             onerror="this.onerror=null;this.src='img/default.png';">
+        <div style="min-width:0;">
+          <div class="picker-title" id="detailSymbol">—</div>
+          <div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" id="detailName"></div>
+        </div>
+      </div>
+      <div class="picker-close" onclick="closeTokenDetail()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </div>
+    </div>
+    <div style="padding:2px 18px 20px;overflow-y:auto;" id="detailBody"></div>
+  </div>
+</div>
+
+<div class="copy-toast" id="copyToast">Address copied</div>
+
 <script>
 /* =========================================================
    TOKEN DATA — loaded DIRECTLY from data/tokens.json, no more
@@ -273,12 +319,21 @@ async function loadTokenList() {
 }
 
 /* =========================================================
-   LOCAL PRICE HISTORY (for 24h %)
+   LOCAL PRICE HISTORY (for the change % shown next to price)
    PRICE_ENGINE doesn't store history — this is a device-local
    snapshot.
+
+   NOTE: the user no longer has to wait a full 24h before any
+   change % shows up. get24hChange() now falls back to the
+   OLDEST snapshot on this device when a true 24h-old snapshot
+   isn't available yet — so a (labelled) change % appears within
+   a few minutes of the first couple of scans. Once 24h of real
+   history accumulates it automatically switches over to a true
+   24h change, no code path change needed.
    ========================================================= */
 const HISTORY_PREFIX = "sdaEx_priceHistory_";
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MIN_PARTIAL_AGE_MS = 3 * 60 * 1000; // ignore snapshots <3 min old (avoids noisy same-scan deltas)
 
 function recordSnapshot(symbol, price) {
   const key = HISTORY_PREFIX + symbol;
@@ -291,13 +346,38 @@ function recordSnapshot(symbol, price) {
   return history;
 }
 
+// Returns { pct, partial, ageMs } or null if there's nothing usable yet.
+// partial === true means "not a full 24h yet, this is since the oldest
+// snapshot we have" — the UI labels this differently (e.g. "· 12m")
+// so it's never confused with a true 24h number.
 function get24hChange(history, currentPrice) {
   if (!history || !history.length || !currentPrice) return null;
+
   const target = Date.now() - DAY_MS;
   let ref = null;
   for (const h of history) if (h.t <= target) ref = h;
-  if (!ref || !ref.p) return null;
-  return ((currentPrice - ref.p) / ref.p) * 100;
+
+  if (ref && ref.p) {
+    return { pct: ((currentPrice - ref.p) / ref.p) * 100, partial: false, ageMs: DAY_MS };
+  }
+
+  // No full 24h of data yet — fall back to the oldest snapshot we do
+  // have, as long as it's old enough to not just be sampling noise.
+  const earliest = history[0];
+  const age = earliest ? Date.now() - earliest.t : 0;
+  if (earliest && earliest.p && age >= MIN_PARTIAL_AGE_MS) {
+    return { pct: ((currentPrice - earliest.p) / earliest.p) * 100, partial: true, ageMs: age };
+  }
+
+  return null;
+}
+
+function fmtDuration(ms) {
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return mins + "m";
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return hours + "h";
+  return Math.round(hours / 24) + "d";
 }
 
 /* =========================================================
@@ -549,11 +629,12 @@ function updateBaseBanner(baseUsdPrice, baseChange){
 
   const el = document.getElementById("baseChange");
   if (baseChange === null) {
-    el.textContent = "waiting for 24h data";
+    el.textContent = "waiting for price history";
     el.className = "banner-change flat";
   } else {
-    el.textContent = (baseChange >= 0 ? "↑ " : "↓ ") + Math.abs(baseChange).toFixed(2) + "% · 24h";
-    el.className = "banner-change " + (baseChange >= 0 ? "up" : "down");
+    const suffix = baseChange.partial ? (" · " + fmtDuration(baseChange.ageMs)) : " · 24h";
+    el.textContent = (baseChange.pct >= 0 ? "↑ " : "↓ ") + Math.abs(baseChange.pct).toFixed(2) + "%" + suffix;
+    el.className = "banner-change " + (baseChange.pct >= 0 ? "up" : "down");
   }
 }
 
@@ -575,8 +656,8 @@ function renderList(){
   let rows = state.rows.slice();
 
   if (q) rows = rows.filter(t => t.symbol.toLowerCase().includes(q) || t.name.toLowerCase().includes(q));
-  if (state.filter === "gainers") rows = rows.filter(t => t.change !== null && t.change > 0);
-  if (state.filter === "losers") rows = rows.filter(t => t.change !== null && t.change < 0);
+  if (state.filter === "gainers") rows = rows.filter(t => t.change !== null && t.change.pct > 0);
+  if (state.filter === "losers") rows = rows.filter(t => t.change !== null && t.change.pct < 0);
 
   rows.sort((a,b) => {
     const av = a.usdPrice ?? -1, bv = b.usdPrice ?? -1;
@@ -595,7 +676,7 @@ function renderList(){
       const hasAnyHistory = state.rows.some(r => r.change !== null);
       empty.textContent = hasAnyHistory
         ? "No tokens matching this filter right now."
-        : "No 24h price history yet — this fills in automatically once the page has been scanning for at least 24 hours.";
+        : "No price history yet — this fills in within a few minutes as the page keeps scanning.";
     } else {
       empty.textContent = "No tokens found.";
     }
@@ -604,10 +685,11 @@ function renderList(){
   empty.style.display = "none";
 
   rows.forEach((t, idx) => {
-    const up = t.change === null ? null : t.change >= 0;
+    const up = t.change === null ? null : t.change.pct >= 0;
     const changeClass = up === null ? "flat" : (up ? "up" : "down");
     const changeText = t.pending ? "…" : t.failed ? "no route" :
-      t.change === null ? "waiting 24h" : (up ? "↑ " : "↓ ") + Math.abs(t.change).toFixed(1) + "%";
+      t.change === null ? "waiting for data" :
+      (up ? "↑ " : "↓ ") + Math.abs(t.change.pct).toFixed(1) + "%" + (t.change.partial ? (" ·" + fmtDuration(t.change.ageMs)) : "");
 
     // Icon path matches the main project: img/ folder, not assets/icons/.
     // If the "icon" field is empty, fall back to img/default.png first
@@ -651,6 +733,214 @@ function colorFor(sym){
 function openToken(symbol){
   if (typeof window.openTokenDetail === "function") window.openTokenDetail(symbol);
   else console.log("Open token detail:", symbol);
+}
+
+/* =========================================================
+   TOKEN DETAIL MODAL
+   Shows: contract address (copyable), a local price-history
+   sparkline, and pool reserves/liquidity vs the current base pair.
+
+   Liquidity comes straight from PRICE_ENGINE.getPoolLiquidity(),
+   which is already cache-first (see factory-engine.js _poolDataCache
+   / _liqCache) — so this almost never fires a fresh RPC call on its
+   own if the main scan warmed the cache recently. When it does need
+   fresh data, factory-engine.js still batches it into one HTTP POST
+   (not one request per pool field), same as the rest of the app.
+   ========================================================= */
+
+let _detailToken = null; // the row currently shown in the modal, used to guard stale async results
+
+// Same native/WSDA handling as AGG_PRICE — WSDA has no direct WSDA/WSDA
+// pool, it must be queried through PRICE_ENGINE as "native" (see the
+// comment on isNativeLike in AGG_PRICE above).
+function _isNativeLikeToken(t){
+  return t.address === "native" || t.symbol === "WSDA";
+}
+function _engineAddrOf(t){
+  return _isNativeLikeToken(t) ? "native" : t.address;
+}
+
+function _symbolForAddr(addr){
+  if (!addr) return "?";
+  if (addr.toLowerCase() === (window.CONFIG?.WSDA || "").toLowerCase()) return "WSDA";
+  const t = (window.TOKENS || []).find(x => x.address.toLowerCase() === addr.toLowerCase());
+  return t ? t.symbol : (addr.slice(0, 6) + "…");
+}
+
+function _decimalsForAddr(addr){
+  if (!addr) return 18;
+  if (addr.toLowerCase() === (window.CONFIG?.WSDA || "").toLowerCase()) return 18;
+  const t = (window.TOKENS || []).find(x => x.address.toLowerCase() === addr.toLowerCase());
+  return t?.decimals ?? 18;
+}
+
+function openTokenDetail(symbol){
+  const row = state.rows.find(r => r.symbol === symbol);
+  if (!row) return;
+  _detailToken = row;
+  renderTokenDetail(row);
+  document.getElementById("tokenDetailOverlay").classList.add("open");
+  loadTokenDetailLiquidity(row);
+}
+window.openTokenDetail = openTokenDetail;
+
+function closeTokenDetail(){
+  document.getElementById("tokenDetailOverlay").classList.remove("open");
+  _detailToken = null;
+}
+
+function copyAddress(addr){
+  if (!addr || addr === "native") return;
+  const done = showCopiedToast;
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(addr).then(done).catch(() => _fallbackCopy(addr, done));
+  } else {
+    _fallbackCopy(addr, done);
+  }
+}
+
+function _fallbackCopy(text, done){
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    done();
+  } catch (e) { console.warn("[copy] fallback failed:", e); }
+}
+
+function showCopiedToast(){
+  const el = document.getElementById("copyToast");
+  if (!el) return;
+  el.style.opacity = "1";
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(() => { el.style.opacity = "0"; }, 1200);
+}
+
+// Sparkline built from the same local history used for the change % —
+// no extra data source, just a visual on top of what's already recorded.
+function buildSparkline(history){
+  if (!history || history.length < 2) return null;
+
+  const pts = history.slice(-50);
+  const prices = pts.map(h => h.p);
+  const min = Math.min(...prices), max = Math.max(...prices);
+  const range = (max - min) || (max * 0.01) || 1;
+
+  const w = 300, chH = 70, pad = 4;
+  const stepX = pts.length > 1 ? (w - pad * 2) / (pts.length - 1) : 0;
+
+  const coords = pts.map((h, i) => {
+    const x = pad + i * stepX;
+    const y = pad + (1 - (h.p - min) / range) * (chH - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+
+  const up = prices[prices.length - 1] >= prices[0];
+  const stroke = up ? "var(--green)" : "var(--red)";
+
+  return `<svg viewBox="0 0 ${w} ${chH}" preserveAspectRatio="none">
+    <polyline points="${coords.join(" ")}" fill="none"
+      style="stroke:${stroke};stroke-width:2;stroke-linejoin:round;stroke-linecap:round;"/>
+  </svg>`;
+}
+
+function renderTokenDetail(row){
+  document.getElementById("detailIcon").src = "img/" + (row.icon || "default.png");
+  document.getElementById("detailSymbol").textContent = row.symbol;
+  document.getElementById("detailName").textContent = row.name || "";
+
+  const changeHtml = row.change
+    ? (() => {
+        const up = row.change.pct >= 0;
+        const suffix = row.change.partial ? (" ·" + fmtDuration(row.change.ageMs)) : " ·24h";
+        return `<span class="${up ? "up" : "down"}">${up ? "↑" : "↓"} ${Math.abs(row.change.pct).toFixed(2)}%${suffix}</span>`;
+      })()
+    : `<span class="flat">no price history yet</span>`;
+
+  const addr = row.address;
+  const addressRow = addr === "native"
+    ? `<div class="detail-address-row"><span>Native SDA — no contract address</span></div>`
+    : `<div class="detail-address-row"><span>${addr}</span><button class="copy-btn" onclick="copyAddress('${addr}')">Copy</button></div>`;
+
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem(HISTORY_PREFIX + row.symbol) || "[]"); } catch {}
+  const chartSvg = buildSparkline(history);
+
+  document.getElementById("detailBody").innerHTML = `
+    <div class="detail-price num">${row.pending ? "…" : row.failed ? "no route" : fmtRate(row.rate, state.base.symbol)}</div>
+    <div class="detail-sub">${row.usdPrice ? fmtUsd(row.usdPrice) : ""} ${changeHtml}</div>
+
+    <div class="detail-section">
+      <div class="detail-label">Contract address</div>
+      ${addressRow}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-label">Price history (this device)</div>
+      <div class="chart-wrap">${chartSvg || '<div class="detail-loading">Not enough history yet — this fills in as the page keeps scanning.</div>'}</div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-label">Liquidity pool (vs ${state.base.symbol})</div>
+      <div id="detailLiquidity"><div class="detail-loading">Loading liquidity…</div></div>
+    </div>
+  `;
+}
+
+async function loadTokenDetailLiquidity(row){
+  const liqEl = document.getElementById("detailLiquidity");
+  if (!liqEl) return;
+
+  const tokenEngine = _engineAddrOf(row);
+  const baseEngine = _engineAddrOf(state.base);
+
+  if (tokenEngine === baseEngine) {
+    liqEl.innerHTML = `<div class="detail-loading">This token IS the base pair (or its native equivalent) — no pool to show.</div>`;
+    return;
+  }
+
+  try {
+    const liq = await PRICE_ENGINE.getPoolLiquidity(tokenEngine, baseEngine);
+
+    // The user may have closed the modal or opened a different token while
+    // this was in flight — don't paint a stale result into the wrong place.
+    if (!_detailToken || _detailToken.symbol !== row.symbol) return;
+
+    if (!liq) {
+      liqEl.innerHTML = `<div class="detail-loading">No direct pool found between ${row.symbol} and ${state.base.symbol}.</div>`;
+      return;
+    }
+
+    const dec0 = _decimalsForAddr(liq.token0);
+    const dec1 = _decimalsForAddr(liq.token1);
+    const sym0 = _symbolForAddr(liq.token0);
+    const sym1 = _symbolForAddr(liq.token1);
+    const r0 = liq.reserve0 / (10 ** dec0);
+    const r1 = liq.reserve1 / (10 ** dec1);
+    const feePct = (liq.fee / 10000).toFixed(2);
+
+    const fmtN = (n) => !isFinite(n) ? "…" : n < 0.01 ? n.toExponential(2) : n.toLocaleString("en-US", { maximumFractionDigits: n < 1000 ? 4 : 0 });
+
+    liqEl.innerHTML = `
+      <div class="liq-grid">
+        <div class="liq-box"><div class="liq-val num">${fmtN(r0)}</div><div class="liq-lbl">${sym0}</div></div>
+        <div class="liq-box"><div class="liq-val num">${fmtN(r1)}</div><div class="liq-lbl">${sym1}</div></div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">
+        Pool fee tier: ${feePct}% &middot; Pool address: <span style="font-family:monospace;">${liq.poolAddr.slice(0, 6)}…${liq.poolAddr.slice(-4)}</span>
+        <button class="copy-btn" style="margin-left:6px;padding:3px 8px;" onclick="copyAddress('${liq.poolAddr}')">Copy</button>
+      </div>
+    `;
+  } catch (e) {
+    if (_detailToken && _detailToken.symbol === row.symbol) {
+      liqEl.innerHTML = `<div class="detail-loading">Failed to load liquidity: ${e.message || e}</div>`;
+    }
+  }
 }
 
 /* =========================================================
