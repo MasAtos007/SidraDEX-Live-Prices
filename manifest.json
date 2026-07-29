@@ -1,0 +1,12 @@
+{
+  "name": "Sidra DEX Live — Price List",
+  "short_name": "Sidra DEX",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0a0a0c",
+  "theme_color": "#0a0a0c",
+  "icons": [
+    { "src": "img/sda-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "img/sda-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
