@@ -331,19 +331,35 @@ async function loadTokenList() {
    history accumulates it automatically switches over to a true
    24h change, no code path change needed.
    ========================================================= */
-const HISTORY_PREFIX = "sdaEx_priceHistory_";
 const DAY_MS = 24 * 60 * 60 * 1000;
-const MIN_PARTIAL_AGE_MS = 3 * 60 * 1000; // ignore snapshots <3 min old (avoids noisy same-scan deltas)
+const MIN_PARTIAL_AGE_MS = 3 * 60 * 1000;
 
-function recordSnapshot(symbol, price) {
-  const key = HISTORY_PREFIX + symbol;
-  const now = Date.now();
-  let history = [];
-  try { history = JSON.parse(localStorage.getItem(key) || "[]"); } catch { history = []; }
-  history.push({ t: now, p: price });
-  history = history.filter(h => now - h.t < DAY_MS * 2);
-  try { localStorage.setItem(key, JSON.stringify(history)); } catch {}
-  return history;
+// URL Web App Apps Script — history harga sekarang global (dari Sheet),
+// bukan lagi per-device via localStorage.
+const HISTORY_API = "https://script.google.com/macros/s/AKfycbyjB5nxZMpMN7BrQoDFlrR-tQimj1bh6W5pkmaqIjn_nskhwjTGlVgCe4E4O-BauLDC/exec";
+
+let _historyCache = {}; // { symbol: [{t, p}, ...] } — diisi dari Sheet, dibaca banyak user
+
+async function loadSharedHistory() {
+  try {
+    const res = await fetch(HISTORY_API + "?type=history");
+    const rows = await res.json(); // [{symbol, price, timestamp}, ...]
+    const grouped = {};
+    rows.forEach(r => {
+      const sym = r.symbol;
+      if (!grouped[sym]) grouped[sym] = [];
+      grouped[sym].push({ t: Number(r.timestamp), p: Number(r.price) });
+    });
+    Object.keys(grouped).forEach(sym => grouped[sym].sort((a, b) => a.t - b.t));
+    _historyCache = grouped;
+  } catch (e) {
+    console.warn("[history] Gagal ambil history dari Sheet:", e);
+    _historyCache = {};
+  }
+}
+
+function getHistoryFor(symbol) {
+  return _historyCache[symbol] || [];
 }
 
 // Returns { pct, partial, ageMs } or null if there's nothing usable yet.
@@ -437,6 +453,7 @@ const AGG_PRICE = (() => {
     document.getElementById("stopScanBtn").style.display = "inline-block";
 
     const allTokens = await loadTokenList();
+    await loadSharedHistory(); // ambil history 7 hari terakhir dari Sheet (global, sekali per scan)
 
     if (!allTokens.length) {
       // loadTokenList already shows the error message in emptyState
@@ -488,8 +505,8 @@ const AGG_PRICE = (() => {
         baseUsdPrice = baseNativeRatio > 0 ? baseNativeRatio * sdaPrice : 0;
       } catch { baseUsdPrice = 0; }
     }
-    const baseHist = recordSnapshot("base_" + base.symbol, baseUsdPrice);
-    updateBaseBanner(baseUsdPrice, get24hChange(baseHist, baseUsdPrice));
+    const baseNativeRatioForChange = isBaseNative ? 1 : (await PRICE_ENGINE.getPrice(baseEngineAddr, "native")) || 0;
+    updateBaseBanner(baseUsdPrice, get24hChange(getHistoryFor(base.symbol), baseNativeRatioForChange));
 
     // All rows start "pending" — rendered right away so the list looks
     // full from the start, then filled in one by one as each batch finishes
@@ -531,9 +548,8 @@ const AGG_PRICE = (() => {
 
           if (nativeRatio > 0 && row) {
             const usdPrice = nativeRatio * sdaPrice;
-            const hist = recordSnapshot(t.symbol, usdPrice);
             row.usdPrice = usdPrice;
-            row.change = get24hChange(hist, usdPrice);
+            row.change = get24hChange(getHistoryFor(t.symbol), nativeRatio);
             row.rate = baseRatio > 0 ? baseRatio : null;
             row.pending = false;
             row.failed = !(baseRatio > 0);
@@ -601,14 +617,8 @@ let state = {
   filter: "all",
   sortDir: "desc",
   rows: [],
-  showNoRoute: false,
   base: { address: "native", symbol: "SDA", name: "Sidra Digital Asset", icon: "sda.png" }
 };
-
-function toggleNoRoute(){
-  state.showNoRoute = !state.showNoRoute;
-  renderList();
-}
 
 function fmtUsd(n){
   if (n === null || n === undefined) return "…";
@@ -661,13 +671,6 @@ function renderList(){
   const q = document.getElementById("searchInput").value.trim().toLowerCase();
   let rows = state.rows.slice();
 
-  // "no route" tokens (no pool found against the current base pair) are
-  // hidden by default — they clutter the list and there's nothing
-  // actionable to show for them. A small toggle at the bottom lets the
-  // user bring them back if they want to see which tokens have no pool.
-  const noRouteCount = rows.filter(t => t.failed).length;
-  if (!state.showNoRoute) rows = rows.filter(t => !t.failed);
-
   if (q) rows = rows.filter(t => t.symbol.toLowerCase().includes(q) || t.name.toLowerCase().includes(q));
   if (state.filter === "gainers") rows = rows.filter(t => t.change !== null && t.change.pct > 0);
   if (state.filter === "losers") rows = rows.filter(t => t.change !== null && t.change.pct < 0);
@@ -690,20 +693,8 @@ function renderList(){
       empty.textContent = hasAnyHistory
         ? "No tokens matching this filter right now."
         : "No price history yet — this fills in within a few minutes as the page keeps scanning.";
-    } else if (noRouteCount > 0 && !state.showNoRoute) {
-      empty.textContent = "All tokens currently have no route against this base pair.";
     } else {
       empty.textContent = "No tokens found.";
-    }
-
-    if (noRouteCount > 0 && !q) {
-      const footer = document.createElement("div");
-      footer.style.cssText = "text-align:center;padding:4px 4px 0;";
-      footer.innerHTML = `
-        <span style="font-size:11.5px;color:var(--text-muted);cursor:pointer;" onclick="toggleNoRoute()">
-          ${state.showNoRoute ? "Hide" : "Show"} ${noRouteCount} token${noRouteCount > 1 ? "s" : ""} with no route
-        </span>`;
-      list.appendChild(footer);
     }
     return;
   }
@@ -746,16 +737,6 @@ function renderList(){
       </div>`;
     list.appendChild(row);
   });
-
-  if (noRouteCount > 0) {
-    const footer = document.createElement("div");
-    footer.style.cssText = "text-align:center;padding:12px 4px;";
-    footer.innerHTML = `
-      <span style="font-size:11.5px;color:var(--text-muted);cursor:pointer;" onclick="toggleNoRoute()">
-        ${state.showNoRoute ? "Hide" : "Show"} ${noRouteCount} token${noRouteCount > 1 ? "s" : ""} with no route
-      </span>`;
-    list.appendChild(footer);
-  }
 }
 
 function colorFor(sym){
@@ -902,9 +883,7 @@ function renderTokenDetail(row){
     ? `<div class="detail-address-row"><span>Native SDA — no contract address</span></div>`
     : `<div class="detail-address-row"><span>${addr}</span><button class="copy-btn" onclick="copyAddress('${addr}')">Copy</button></div>`;
 
-  let history = [];
-  try { history = JSON.parse(localStorage.getItem(HISTORY_PREFIX + row.symbol) || "[]"); } catch {}
-  const chartSvg = buildSparkline(history);
+  const chartSvg = buildSparkline(getHistoryFor(row.symbol));
 
   document.getElementById("detailBody").innerHTML = `
     <div class="detail-price num">${row.pending ? "…" : row.failed ? "no route" : fmtRate(row.rate, state.base.symbol)}</div>
@@ -916,7 +895,7 @@ function renderTokenDetail(row){
     </div>
 
     <div class="detail-section">
-      <div class="detail-label">Price history (this device)</div>
+      <div class="detail-label">Price history (7 days)</div>
       <div class="chart-wrap">${chartSvg || '<div class="detail-loading">Not enough history yet — this fills in as the page keeps scanning.</div>'}</div>
     </div>
 
