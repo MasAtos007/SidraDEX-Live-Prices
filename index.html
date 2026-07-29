@@ -19,6 +19,16 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
+<!-- ===== APP ICON / PWA ===== -->
+<link rel="icon" type="image/png" href="img/sda.png">
+<link rel="apple-touch-icon" href="img/sda-192.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0a0c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sidra DEX">
+
 <!-- =========================================================
      THIS ORDER IS REQUIRED — window.PRICE_ENGINE is defined in
      factory-engine.js, but it needs window.rpcBatch (from
@@ -166,6 +176,19 @@
   .chart-axis span:first-child{transform:translateX(0);}
   .chart-axis span:last-child{transform:translateX(-100%);}
   .copy-toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:var(--surface-3);border:1px solid var(--border);color:var(--text-primary);font-size:12px;padding:8px 16px;border-radius:999px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:2000;}
+
+  .refresh-indicator{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--text-muted);margin-bottom:8px;}
+  .refresh-indicator .live-dot{width:5px;height:5px;border-radius:50%;background:var(--green);flex-shrink:0;}
+  .refresh-indicator.flash{animation:flashUpdate 1s ease;}
+  @keyframes flashUpdate{
+    0%{color:var(--green);}
+    100%{color:var(--text-muted);}
+  }
+  .chart-wrap.flash{animation:chartFlash 1s ease;}
+  @keyframes chartFlash{
+    0%{border-color:var(--green);box-shadow:0 0 0 1px var(--green);}
+    100%{border-color:var(--border);box-shadow:none;}
+  }
 </style>
 </head>
 <body>
@@ -180,8 +203,16 @@
         <div class="brand-sub"><span class="dot" id="statusDot"></span><span id="statusText">Connecting...</span></div>
       </div>
     </div>
-    <div class="icon-btn" id="refreshBtn" role="button" aria-label="Rescan" onclick="AGG_PRICE.rescan()">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    <div style="display:flex;gap:8px;">
+      <div class="icon-btn" id="shareBtn" role="button" aria-label="Share" onclick="shareApp()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+          <line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/>
+        </svg>
+      </div>
+      <div class="icon-btn" id="refreshBtn" role="button" aria-label="Rescan" onclick="AGG_PRICE.rescan()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+      </div>
     </div>
   </div>
 
@@ -217,7 +248,7 @@
 
   <div class="search">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-    <input type="text" id="searchInput" placeholder="Search token, e.g. FREEt" oninput="renderList()">
+    <input type="text" id="searchInput" placeholder="Search token, e.g. FREEt" oninput="onSearchInput()">
   </div>
 
   <div class="tabs">
@@ -252,7 +283,7 @@
     </div>
     <div class="search picker-search">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-      <input type="text" id="basePickerSearch" placeholder="Search base token..." oninput="renderBasePicker()">
+      <input type="text" id="basePickerSearch" placeholder="Search base token..." oninput="onBaseSearchInput()">
     </div>
     <div class="picker-list" id="basePickerList"></div>
   </div>
@@ -590,10 +621,16 @@ const AGG_PRICE = (() => {
 
   function stopScan() {
     if (!_scanning) return;
+    if (typeof gtag === "function") {
+      gtag('event', 'stop_scan_click');
+    }
     _stopRequested = true;
   }
 
   function rescan() {
+    if (typeof gtag === "function") {
+      gtag('event', 'rescan_click', { state: _scanning ? 'stop' : 'start' });
+    }
     if (_scanning) { stopScan(); return; }
     scanAll();
   }
@@ -625,8 +662,25 @@ let state = {
   base: { address: "native", symbol: "SDA", name: "Sidra Digital Asset", icon: "sda.png" }
 };
 
+let _searchDebounceTimer = null;
+function onSearchInput(){
+  renderList();
+  clearTimeout(_searchDebounceTimer);
+  _searchDebounceTimer = setTimeout(() => {
+    const q = document.getElementById("searchInput").value.trim();
+    if (typeof gtag === "function" && q) {
+      gtag('event', 'search_token', { query: q });
+    }
+  }, 800);
+}
+
 function toggleNoRoute(){
   state.showNoRoute = !state.showNoRoute;
+
+  if (typeof gtag === "function") {
+    gtag('event', 'toggle_no_route', { show: state.showNoRoute });
+  }
+
   renderList();
 }
 
@@ -668,12 +722,22 @@ function setFilter(f, el){
   state.filter = f;
   document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
   el.classList.add("active");
+
+  if (typeof gtag === "function") {
+    gtag('event', 'filter_change', { filter: f });
+  }
+
   renderList();
 }
 
 function toggleSort(){
   state.sortDir = state.sortDir === "desc" ? "asc" : "desc";
   document.getElementById("sortToggle").textContent = "Price (USD) " + (state.sortDir === "desc" ? "↓" : "↑");
+
+  if (typeof gtag === "function") {
+    gtag('event', 'sort_toggle', { direction: state.sortDir });
+  }
+
   renderList();
 }
 
@@ -805,6 +869,59 @@ function openToken(symbol){
 
 let _detailToken = null; // the row currently shown in the modal, used to guard stale async results
 
+// Auto-refresh history from the Sheet every 5 minutes (matches the
+// Sheet's own save interval) — only refetches history (light, no RPC),
+// and only re-renders the chart if a detail modal is currently open.
+// Does NOT touch on-chain rate/liquidity — those still need a manual
+// rescan since they cost RPC calls.
+const HISTORY_REFRESH_MS = 5 * 60 * 1000;
+let _lastHistoryRefreshAt = Date.now();
+
+function startHistoryAutoRefresh(){
+  // Tick every 15s just to keep the "Updated Xm ago" text live between refreshes.
+  setInterval(updateRefreshIndicatorText, 15000);
+
+  setInterval(async () => {
+    await loadSharedHistory();
+    _lastHistoryRefreshAt = Date.now();
+
+    // Refresh the "change %" badges in the list using the new history,
+    // without re-querying the chain.
+    state.rows.forEach(r => {
+      if (r.usdPrice === null) return;
+      const sdaPrice = (typeof TOKEN_PRICE_USD !== "undefined" ? TOKEN_PRICE_USD["SDA"] : 0) || 0;
+      const nativeRatio = sdaPrice > 0 ? r.usdPrice / sdaPrice : 0;
+      r.change = get24hChange(getHistoryFor(r.symbol), nativeRatio);
+    });
+    renderList();
+
+    // If a token detail modal is open, refresh its chart + label too.
+    if (_detailToken) {
+      const fresh = state.rows.find(r => r.symbol === _detailToken.symbol);
+      if (fresh) {
+        _detailToken = fresh;
+        renderTokenDetail(fresh); // re-renders price/chart/label; liquidity box untouched (still cached)
+        flashRefreshIndicator();
+      }
+    }
+  }, HISTORY_REFRESH_MS);
+}
+
+function updateRefreshIndicatorText(){
+  const el = document.getElementById("refreshIndicatorText");
+  if (!el) return; // modal not open right now
+  const secs = Math.round((Date.now() - _lastHistoryRefreshAt) / 1000);
+  el.textContent = secs < 60 ? "Updated just now" : "Updated " + fmtDuration(secs * 1000) + " ago";
+}
+
+function flashRefreshIndicator(){
+  const badge = document.getElementById("refreshIndicator");
+  const chartWrap = document.getElementById("chartWrap");
+  if (badge) { badge.classList.remove("flash"); void badge.offsetWidth; badge.classList.add("flash"); }
+  if (chartWrap) { chartWrap.classList.remove("flash"); void chartWrap.offsetWidth; chartWrap.classList.add("flash"); }
+  updateRefreshIndicatorText();
+}
+
 // Same native/WSDA handling as AGG_PRICE — WSDA has no direct WSDA/WSDA
 // pool, it must be queried through PRICE_ENGINE as "native" (see the
 // comment on isNativeLike in AGG_PRICE above).
@@ -834,18 +951,35 @@ function openTokenDetail(symbol){
   if (!row) return;
   _detailToken = row;
   renderTokenDetail(row);
+  updateRefreshIndicatorText();
+
+  // GA4 tracking — dipanggil tepat sebelum modal dibuka
+  if (typeof gtag === "function") {
+    gtag('event', 'open_chart', {
+      token: row.symbol
+    });
+  }
+
   document.getElementById("tokenDetailOverlay").classList.add("open");
   loadTokenDetailLiquidity(row);
 }
 window.openTokenDetail = openTokenDetail;
 
 function closeTokenDetail(){
+  if (typeof gtag === "function" && _detailToken) {
+    gtag('event', 'close_chart', { token: _detailToken.symbol });
+  }
   document.getElementById("tokenDetailOverlay").classList.remove("open");
   _detailToken = null;
 }
 
-function copyAddress(addr){
+function copyAddress(addr, type){
   if (!addr || addr === "native") return;
+
+  if (typeof gtag === "function") {
+    gtag('event', 'copy_address', { address_type: type || 'unknown' });
+  }
+
   const done = showCopiedToast;
   if (navigator.clipboard?.writeText) {
     navigator.clipboard.writeText(addr).then(done).catch(() => _fallbackCopy(addr, done));
@@ -876,15 +1010,49 @@ function showCopiedToast(){
   el._hideTimer = setTimeout(() => { el.style.opacity = "0"; }, 1200);
 }
 
+function shareApp(){
+  if (typeof gtag === "function") gtag('event', 'share_click');
+
+  const shareData = {
+    title: "Sidra DEX Live — Price List",
+    text: "Live token prices on Sidra Chain",
+    url: window.location.href
+  };
+
+  if (navigator.share) {
+    navigator.share(shareData).catch(() => {});
+  } else if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(shareData.url).then(() => {
+      const toast = document.getElementById("copyToast");
+      toast.textContent = "Link copied";
+      showCopiedToast();
+      setTimeout(() => { toast.textContent = "Address copied"; }, 1300);
+    });
+  }
+}
+
 // Sparkline built from the same shared history used for the change % —
 // no extra data source, just a visual on top of what's already recorded.
 // Axis now shows up to 7 evenly-spaced day labels (weekday abbreviations),
 // staggered up/down (zig-zag) so they never collide even on a narrow
 // mobile screen — see "Version C" mockup discussed with the user.
+function downsampleHistory(history, maxPoints){
+  // Ambil titik yang disebar MERATA ke seluruh rentang waktu history,
+  // bukan cuma N titik terakhir — supaya chart tetap mewakili seluruh
+  // riwayat (7 hari) meski snapshot-nya rapat (banyak per jam).
+  if (history.length <= maxPoints) return history;
+  const result = [];
+  for (let i = 0; i < maxPoints; i++){
+    const idx = Math.round((i / (maxPoints - 1)) * (history.length - 1));
+    result.push(history[idx]);
+  }
+  return result;
+}
+
 function buildSparkline(history){
   if (!history || history.length < 2) return null;
 
-  const pts = history.slice(-50);
+  const pts = downsampleHistory(history, 50);
   const prices = pts.map(h => h.p);
   const min = Math.min(...prices), max = Math.max(...prices);
   const range = (max - min) || (max * 0.01) || 1;
@@ -930,6 +1098,18 @@ function buildSparkline(history){
     return `<line x1="${c.x.toFixed(1)}" y1="${chH - botPad}" x2="${c.x.toFixed(1)}" y2="${chH - botPad + 4}" stroke="var(--text-muted)" stroke-width="1"/>`;
   }).join("");
 
+  // Label harga di titik terakhir — ditempel di kanan titik kalau
+  // masih cukup ruang, kalau titiknya terlalu mepet ke pinggir kanan
+  // (misal history-nya cuma sedikit titik), label dipindah ke kiri
+  // titik supaya tidak kepotong keluar viewBox.
+  const lastLabel = fmtP(prices[prices.length - 1]);
+  const lastLabelW = lastLabel.length * 5.5 + 6; // perkiraan lebar teks
+  const spaceRight = w - pad - last.x;
+  const lastLabelIsRight = spaceRight >= lastLabelW + 6;
+  const lastLabelX = lastLabelIsRight ? last.x + 6 : last.x - 6;
+  const lastLabelAnchor = lastLabelIsRight ? "start" : "end";
+  const lastLabelY = Math.min(Math.max(last.y, topPad + 8), chH - botPad - 4);
+
   const svg = `<svg viewBox="0 0 ${w} ${chH}" preserveAspectRatio="none">
     <defs>
       <linearGradient id="${fillId}" x1="0" y1="0" x2="0" y2="1">
@@ -942,7 +1122,12 @@ function buildSparkline(history){
     <polygon points="${areaStr}" fill="url(#${fillId})" stroke="none"/>
     <polyline points="${lineStr}" fill="none"
       style="stroke:${stroke};stroke-width:2;stroke-linejoin:round;stroke-linecap:round;"/>
-    <circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="3" fill="${stroke}"/>
+    <circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="3.5" fill="${stroke}"/>
+    <circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="3.5" fill="none" stroke="${stroke}" stroke-width="1.5" opacity="0.5">
+      <animate attributeName="r" values="3.5;8;3.5" dur="2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.5;0;0.5" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <text x="${lastLabelX.toFixed(1)}" y="${lastLabelY.toFixed(1)}" font-size="10" font-weight="600" text-anchor="${lastLabelAnchor}" fill="${stroke}">${lastLabel}</text>
     <text x="${pad}" y="12" font-size="9" fill="var(--text-muted)">${fmtP(max)}</text>
     <text x="${pad}" y="${chH - 4}" font-size="9" fill="var(--text-muted)">${fmtP(min)}</text>
     ${ticks}
@@ -962,6 +1147,15 @@ function buildSparkline(history){
   return { svg, axisHtml };
 }
 
+function historyRangeLabel(history){
+  if (!history || history.length < 2) return "";
+  const spanMs = history[history.length - 1].t - history[0].t;
+  if (spanMs < 60 * 60 * 1000) return " (last hour)";
+  if (spanMs < DAY_MS) return " (" + fmtDuration(spanMs) + ")";
+  const days = Math.round(spanMs / DAY_MS);
+  return days <= 1 ? " (1 day)" : ` (${days} days)`;
+}
+
 function renderTokenDetail(row){
   document.getElementById("detailIcon").src = "img/" + (row.icon || "default.png");
   document.getElementById("detailSymbol").textContent = row.symbol;
@@ -978,7 +1172,7 @@ function renderTokenDetail(row){
   const addr = row.address;
   const addressRow = addr === "native"
     ? `<div class="detail-address-row"><span>Native SDA — no contract address</span></div>`
-    : `<div class="detail-address-row"><span>${addr}</span><button class="copy-btn" onclick="copyAddress('${addr}')">Copy</button></div>`;
+    : `<div class="detail-address-row"><span>${addr}</span><button class="copy-btn" onclick="copyAddress('${addr}', 'token')">Copy</button></div>`;
 
   const chart = buildSparkline(getHistoryFor(row.symbol));
 
@@ -992,8 +1186,9 @@ function renderTokenDetail(row){
     </div>
 
     <div class="detail-section">
-      <div class="detail-label">Price history (7 days)</div>
-      <div class="chart-wrap">${chart ? chart.svg : '<div class="detail-loading">Not enough history yet — this fills in as the page keeps scanning.</div>'}</div>
+      <div class="detail-label">Price history${historyRangeLabel(getHistoryFor(row.symbol))}</div>
+      <div class="refresh-indicator" id="refreshIndicator"><span class="live-dot"></span><span id="refreshIndicatorText">Updated just now</span></div>
+      <div class="chart-wrap" id="chartWrap">${chart ? chart.svg : '<div class="detail-loading">Not enough history yet — this fills in as the page keeps scanning.</div>'}</div>
       ${chart ? `<div class="chart-axis">${chart.axisHtml}</div>` : ""}
     </div>
 
@@ -1045,7 +1240,7 @@ async function loadTokenDetailLiquidity(row){
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">
         Pool fee tier: ${feePct}% &middot; Pool address: <span style="font-family:monospace;">${liq.poolAddr.slice(0, 6)}…${liq.poolAddr.slice(-4)}</span>
-        <button class="copy-btn" style="margin-left:6px;padding:3px 8px;" onclick="copyAddress('${liq.poolAddr}')">Copy</button>
+        <button class="copy-btn" style="margin-left:6px;padding:3px 8px;" onclick="copyAddress('${liq.poolAddr}', 'pool')">Copy</button>
       </div>
     `;
   } catch (e) {
@@ -1069,13 +1264,33 @@ function _basePickerCandidates(){
   ];
 }
 
+let _baseSearchDebounceTimer = null;
+function onBaseSearchInput(){
+  renderBasePicker();
+  clearTimeout(_baseSearchDebounceTimer);
+  _baseSearchDebounceTimer = setTimeout(() => {
+    const q = document.getElementById("basePickerSearch").value.trim();
+    if (typeof gtag === "function" && q) {
+      gtag('event', 'search_base_token', { query: q });
+    }
+  }, 800);
+}
+
 function openBasePicker(){
   document.getElementById("basePickerSearch").value = "";
   renderBasePicker();
+
+  if (typeof gtag === "function") {
+    gtag('event', 'open_base_picker');
+  }
+
   document.getElementById("basePickerOverlay").classList.add("open");
 }
 
 function closeBasePicker(){
+  if (typeof gtag === "function") {
+    gtag('event', 'close_base_picker');
+  }
   document.getElementById("basePickerOverlay").classList.remove("open");
 }
 
@@ -1118,12 +1333,23 @@ function selectBase(t){
     closeBasePicker();
     return;
   }
+
+  if (typeof gtag === "function") {
+    gtag('event', 'change_base_pair', {
+      base_from: state.base.symbol,
+      base_to: t.symbol
+    });
+  }
+
   state.base = { address: t.address, symbol: t.symbol, name: t.name, icon: t.icon || "default.png" };
   closeBasePicker();
   AGG_PRICE.restart();
 }
 
-document.addEventListener("DOMContentLoaded", () => AGG_PRICE.scanAll());
+document.addEventListener("DOMContentLoaded", () => {
+  AGG_PRICE.scanAll();
+  startHistoryAutoRefresh();
+});
 </script>
 </body>
 </html>
