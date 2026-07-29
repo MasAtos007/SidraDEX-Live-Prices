@@ -868,6 +868,7 @@ function openToken(symbol){
    ========================================================= */
 
 let _detailToken = null; // the row currently shown in the modal, used to guard stale async results
+let _liqRequestId = 0;   // bumped on every fetch attempt, so overlapping calls for the same token don't both paint
 
 // Auto-refresh history from the Sheet every 5 minutes (matches the
 // Sheet's own save interval) — only refetches history (light, no RPC),
@@ -893,6 +894,14 @@ function startHistoryAutoRefresh(){
       const nativeRatio = sdaPrice > 0 ? r.usdPrice / sdaPrice : 0;
       r.change = get24hChange(getHistoryFor(r.symbol), nativeRatio);
     });
+
+    // Refresh base banner change% juga, biar sinkron sama badge di list
+    const isBaseNative = state.base.address === "native" || state.base.symbol === "WSDA";
+    const baseNativeRatio = isBaseNative ? 1 : (await PRICE_ENGINE.getPrice(_engineAddrOf(state.base), "native")) || 0;
+    const sdaPriceNow = (typeof TOKEN_PRICE_USD !== "undefined" ? TOKEN_PRICE_USD["SDA"] : 0) || 0;
+    const baseUsdPriceNow = baseNativeRatio * sdaPriceNow;
+    updateBaseBanner(baseUsdPriceNow, get24hChange(getHistoryFor(state.base.symbol), baseNativeRatio));
+
     renderList();
 
     // If a token detail modal is open, refresh its chart + label too.
@@ -900,7 +909,8 @@ function startHistoryAutoRefresh(){
       const fresh = state.rows.find(r => r.symbol === _detailToken.symbol);
       if (fresh) {
         _detailToken = fresh;
-        renderTokenDetail(fresh); // re-renders price/chart/label; liquidity box untouched (still cached)
+        renderTokenDetail(fresh); // resets liquidity box to "Loading…" placeholder
+        loadTokenDetailLiquidity(fresh); // so we re-fetch it right after — cheap, cache-first
         flashRefreshIndicator();
       }
     }
@@ -1203,6 +1213,8 @@ async function loadTokenDetailLiquidity(row){
   const liqEl = document.getElementById("detailLiquidity");
   if (!liqEl) return;
 
+  const myRequestId = ++_liqRequestId; // this call "owns" the latest request
+
   const tokenEngine = _engineAddrOf(row);
   const baseEngine = _engineAddrOf(state.base);
 
@@ -1214,9 +1226,12 @@ async function loadTokenDetailLiquidity(row){
   try {
     const liq = await PRICE_ENGINE.getPoolLiquidity(tokenEngine, baseEngine);
 
-    // The user may have closed the modal or opened a different token while
-    // this was in flight — don't paint a stale result into the wrong place.
+    // The user may have closed the modal, opened a different token, or a
+    // newer fetch for the SAME token may have started (e.g. click + the
+    // 5-min auto-refresh overlapping) — only the most recent request for
+    // this token is allowed to paint.
     if (!_detailToken || _detailToken.symbol !== row.symbol) return;
+    if (myRequestId !== _liqRequestId) return;
 
     if (!liq) {
       liqEl.innerHTML = `<div class="detail-loading">No direct pool found between ${row.symbol} and ${state.base.symbol}.</div>`;
@@ -1244,7 +1259,7 @@ async function loadTokenDetailLiquidity(row){
       </div>
     `;
   } catch (e) {
-    if (_detailToken && _detailToken.symbol === row.symbol) {
+    if (_detailToken && _detailToken.symbol === row.symbol && myRequestId === _liqRequestId) {
       liqEl.innerHTML = `<div class="detail-loading">Failed to load liquidity: ${e.message || e}</div>`;
     }
   }
