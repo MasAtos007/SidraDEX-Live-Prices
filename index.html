@@ -161,6 +161,10 @@
   .detail-loading{font-size:12px;color:var(--text-muted);text-align:center;padding:16px 4px;}
   .chart-wrap{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:8px 6px;}
   .chart-wrap svg{width:100%;height:70px;display:block;}
+  .chart-axis{position:relative;height:32px;margin-top:4px;padding:0 2px;}
+  .chart-axis span{position:absolute;font-size:9.5px;white-space:nowrap;transform:translateX(-50%);}
+  .chart-axis span:first-child{transform:translateX(0);}
+  .chart-axis span:last-child{transform:translateX(-100%);}
   .copy-toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:var(--surface-3);border:1px solid var(--border);color:var(--text-primary);font-size:12px;padding:8px 16px;border-radius:999px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:2000;}
 </style>
 </head>
@@ -617,8 +621,14 @@ let state = {
   filter: "all",
   sortDir: "desc",
   rows: [],
+  showNoRoute: false,
   base: { address: "native", symbol: "SDA", name: "Sidra Digital Asset", icon: "sda.png" }
 };
+
+function toggleNoRoute(){
+  state.showNoRoute = !state.showNoRoute;
+  renderList();
+}
 
 function fmtUsd(n){
   if (n === null || n === undefined) return "…";
@@ -671,6 +681,13 @@ function renderList(){
   const q = document.getElementById("searchInput").value.trim().toLowerCase();
   let rows = state.rows.slice();
 
+  // "no route" tokens (no pool found against the current base pair) are
+  // hidden by default — they clutter the list and there's nothing
+  // actionable to show for them. A small toggle at the bottom lets the
+  // user bring them back if they want to see which tokens have no pool.
+  const noRouteCount = rows.filter(t => t.failed).length;
+  if (!state.showNoRoute) rows = rows.filter(t => !t.failed);
+
   if (q) rows = rows.filter(t => t.symbol.toLowerCase().includes(q) || t.name.toLowerCase().includes(q));
   if (state.filter === "gainers") rows = rows.filter(t => t.change !== null && t.change.pct > 0);
   if (state.filter === "losers") rows = rows.filter(t => t.change !== null && t.change.pct < 0);
@@ -693,8 +710,20 @@ function renderList(){
       empty.textContent = hasAnyHistory
         ? "No tokens matching this filter right now."
         : "No price history yet — this fills in within a few minutes as the page keeps scanning.";
+    } else if (noRouteCount > 0 && !state.showNoRoute) {
+      empty.textContent = "All tokens currently have no route against this base pair.";
     } else {
       empty.textContent = "No tokens found.";
+    }
+
+    if (noRouteCount > 0 && !q) {
+      const footer = document.createElement("div");
+      footer.style.cssText = "text-align:center;padding:4px 4px 0;";
+      footer.innerHTML = `
+        <span style="font-size:11.5px;color:var(--text-muted);cursor:pointer;" onclick="toggleNoRoute()">
+          ${state.showNoRoute ? "Hide" : "Show"} ${noRouteCount} token${noRouteCount > 1 ? "s" : ""} with no route
+        </span>`;
+      list.appendChild(footer);
     }
     return;
   }
@@ -737,6 +766,16 @@ function renderList(){
       </div>`;
     list.appendChild(row);
   });
+
+  if (noRouteCount > 0) {
+    const footer = document.createElement("div");
+    footer.style.cssText = "text-align:center;padding:12px 4px;";
+    footer.innerHTML = `
+      <span style="font-size:11.5px;color:var(--text-muted);cursor:pointer;" onclick="toggleNoRoute()">
+        ${state.showNoRoute ? "Hide" : "Show"} ${noRouteCount} token${noRouteCount > 1 ? "s" : ""} with no route
+      </span>`;
+    list.appendChild(footer);
+  }
 }
 
 function colorFor(sym){
@@ -837,8 +876,11 @@ function showCopiedToast(){
   el._hideTimer = setTimeout(() => { el.style.opacity = "0"; }, 1200);
 }
 
-// Sparkline built from the same local history used for the change % —
+// Sparkline built from the same shared history used for the change % —
 // no extra data source, just a visual on top of what's already recorded.
+// Axis now shows up to 7 evenly-spaced day labels (weekday abbreviations),
+// staggered up/down (zig-zag) so they never collide even on a narrow
+// mobile screen — see "Version C" mockup discussed with the user.
 function buildSparkline(history){
   if (!history || history.length < 2) return null;
 
@@ -847,22 +889,77 @@ function buildSparkline(history){
   const min = Math.min(...prices), max = Math.max(...prices);
   const range = (max - min) || (max * 0.01) || 1;
 
-  const w = 300, chH = 70, pad = 4;
+  const w = 300, chH = 90, pad = 6, topPad = 18, botPad = 18;
+  const plotH = chH - topPad - botPad;
   const stepX = pts.length > 1 ? (w - pad * 2) / (pts.length - 1) : 0;
 
   const coords = pts.map((h, i) => {
     const x = pad + i * stepX;
-    const y = pad + (1 - (h.p - min) / range) * (chH - pad * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
+    const y = topPad + (1 - (h.p - min) / range) * plotH;
+    return { x, y };
   });
 
   const up = prices[prices.length - 1] >= prices[0];
   const stroke = up ? "var(--green)" : "var(--red)";
+  const fillId = "sparkFill_" + Math.random().toString(36).slice(2, 8);
 
-  return `<svg viewBox="0 0 ${w} ${chH}" preserveAspectRatio="none">
-    <polyline points="${coords.join(" ")}" fill="none"
+  const lineStr = coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
+  const areaStr = `${pad},${chH - botPad} ${lineStr} ${w - pad},${chH - botPad}`;
+  const last = coords[coords.length - 1];
+
+  const fmtP = (n) => n < 0.01 ? n.toExponential(2) : n.toLocaleString("en-US", { maximumFractionDigits: n < 1 ? 6 : 4 });
+
+  // Pick up to 7 evenly-spaced points across the available history to
+  // use as axis tick marks + labels (fewer if less history exists yet).
+  const AXIS_COUNT = Math.min(7, pts.length);
+  const axisIdx = [];
+  for (let i = 0; i < AXIS_COUNT; i++) {
+    const idx = Math.round((i / (AXIS_COUNT - 1)) * (pts.length - 1));
+    if (!axisIdx.includes(idx)) axisIdx.push(idx);
+  }
+
+  const fmtAxisLabel = (ts) => {
+    const diff = Date.now() - ts;
+    if (diff < 60000) return "now";
+    if (diff < DAY_MS) return fmtDuration(diff) + " ago";
+    return new Date(ts).toLocaleDateString("en-US", { weekday: "short" });
+  };
+
+  const ticks = axisIdx.map(idx => {
+    const c = coords[idx];
+    return `<line x1="${c.x.toFixed(1)}" y1="${chH - botPad}" x2="${c.x.toFixed(1)}" y2="${chH - botPad + 4}" stroke="var(--text-muted)" stroke-width="1"/>`;
+  }).join("");
+
+  const svg = `<svg viewBox="0 0 ${w} ${chH}" preserveAspectRatio="none">
+    <defs>
+      <linearGradient id="${fillId}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${stroke}" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="${stroke}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <line x1="${pad}" y1="${chH - botPad}" x2="${w - pad}" y2="${chH - botPad}"
+      style="stroke:var(--border);stroke-width:1;"/>
+    <polygon points="${areaStr}" fill="url(#${fillId})" stroke="none"/>
+    <polyline points="${lineStr}" fill="none"
       style="stroke:${stroke};stroke-width:2;stroke-linejoin:round;stroke-linecap:round;"/>
+    <circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="3" fill="${stroke}"/>
+    <text x="${pad}" y="12" font-size="9" fill="var(--text-muted)">${fmtP(max)}</text>
+    <text x="${pad}" y="${chH - 4}" font-size="9" fill="var(--text-muted)">${fmtP(min)}</text>
+    ${ticks}
   </svg>`;
+
+  const axisHtml = axisIdx.map((idx, i) => {
+    const c = coords[idx];
+    const xPct = (c.x / w) * 100;
+    const isLast = i === axisIdx.length - 1;
+    const stagger = i % 2 === 1 && !isLast;
+    const topStyle = stagger ? "top:14px;" : "top:0;";
+    const colorStyle = isLast ? "color:var(--text-secondary);font-weight:500;" : "color:var(--text-muted);";
+    const label = fmtAxisLabel(pts[idx].t);
+    return `<span style="left:${xPct.toFixed(1)}%;${topStyle}${colorStyle}">${label}</span>`;
+  }).join("");
+
+  return { svg, axisHtml };
 }
 
 function renderTokenDetail(row){
@@ -883,7 +980,7 @@ function renderTokenDetail(row){
     ? `<div class="detail-address-row"><span>Native SDA — no contract address</span></div>`
     : `<div class="detail-address-row"><span>${addr}</span><button class="copy-btn" onclick="copyAddress('${addr}')">Copy</button></div>`;
 
-  const chartSvg = buildSparkline(getHistoryFor(row.symbol));
+  const chart = buildSparkline(getHistoryFor(row.symbol));
 
   document.getElementById("detailBody").innerHTML = `
     <div class="detail-price num">${row.pending ? "…" : row.failed ? "no route" : fmtRate(row.rate, state.base.symbol)}</div>
@@ -896,7 +993,8 @@ function renderTokenDetail(row){
 
     <div class="detail-section">
       <div class="detail-label">Price history (7 days)</div>
-      <div class="chart-wrap">${chartSvg || '<div class="detail-loading">Not enough history yet — this fills in as the page keeps scanning.</div>'}</div>
+      <div class="chart-wrap">${chart ? chart.svg : '<div class="detail-loading">Not enough history yet — this fills in as the page keeps scanning.</div>'}</div>
+      ${chart ? `<div class="chart-axis">${chart.axisHtml}</div>` : ""}
     </div>
 
     <div class="detail-section">
