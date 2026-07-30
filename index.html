@@ -29,27 +29,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Sidra DEX">
 
-<!-- =========================================================
-     THIS ORDER IS REQUIRED — window.PRICE_ENGINE is defined in
-     factory-engine.js, but it needs window.rpcBatch (from
-     rpc-batch.js) and window.CONFIG (from config.js) to already
-     exist first.
-
-     The order below is MATCHED to the main wallet project
-     (index.html) so every global (CONFIG, provider, window.RPC,
-     window.rpcBatch, window.PRICE_ENGINE, TOKEN_PRICE_USD) stays
-     consistent and nothing gets loaded twice:
-
-     1. ethers.js
-     2. config.js          (CONFIG, provider, window.RPC)
-     3. rpc-batch.js        (window.rpcBatch — used by factory-engine.js)
-     4. factory-engine.js   (defines window.PRICE_ENGINE)
-     5. balance.js          (TOKEN_PRICE_USD — SDA base price, exactly
-                              the same one the main wallet uses)
-
-     If all of these are already loaded via a shared header/layout in
-     your app, remove these 5 <script src> lines to avoid double-loading.
-     ========================================================= -->
 <!-- ETHERS (must load first) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
 <script src="js/config.js"></script>
@@ -114,11 +93,16 @@
   .tab{flex:1;text-align:center;padding:8px 0;border-radius:999px;font-size:12px;font-weight:500;color:var(--text-secondary);background:var(--surface-1);border:1px solid var(--border);cursor:pointer;}
   .tab.active{background:var(--amber);color:#1a1103;border-color:var(--amber);}
 
-  .list-head{display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);padding:0 4px 8px;}
-  .list-head span:last-child{cursor:pointer;}
+  .list-head{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-muted);padding:0 4px 8px;}
+  .list-head-right{display:flex;align-items:center;gap:8px;}
+  .list-head-right span{cursor:pointer;user-select:none;}
+  .liq-mode-btn{width:22px;height:22px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-muted);cursor:pointer;flex-shrink:0;padding:0;}
+  .liq-mode-btn.active{background:rgba(79,163,227,.18);border-color:#4fa3e3;color:#4fa3e3;}
+  .liq-mode-btn svg{width:12px;height:12px;}
 
   .list{display:flex;flex-direction:column;}
   .row{display:flex;align-items:center;justify-content:space-between;padding:11px 4px;border-bottom:1px solid var(--border);cursor:pointer;}
+  .row.liq-row{border-bottom:none;padding-bottom:4px;}
   .row:last-child{border-bottom:none;}
   .row-left{display:flex;align-items:center;gap:11px;min-width:0;}
   .token-rank{width:16px;flex-shrink:0;text-align:center;font-size:11px;font-weight:600;color:var(--text-muted);}
@@ -134,6 +118,16 @@
   .token-change{font-size:11px;}
   .row.pending .token-price, .row.pending .token-change, .row.pending .token-usd{color:var(--text-muted);}
   .row.failed .token-price{color:var(--text-muted);}
+
+  .liq-inline{max-width:210px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .liq-row-bar-wrap{padding:0 4px 11px;border-bottom:1px solid var(--border);}
+  .liq-row-bar-wrap:last-child{border-bottom:none;}
+  .liq-row-bar{height:5px;border-radius:3px;overflow:hidden;display:flex;margin-left:61px;}
+  .liq-row-bar-a{background:#4fa3e3;}
+  .liq-row-bar-b{background:var(--amber);}
+  .liq-bar-labels{display:flex;justify-content:space-between;margin-left:61px;margin-top:6px;font-size:12px;font-weight:600;color:var(--text-primary);}
+  .liq-bar-labels .dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:5px;}
+  .liq-bar-status{margin-left:61px;font-size:11px;color:var(--text-muted);}
 
   .empty,.loading{text-align:center;padding:40px 10px;color:var(--text-muted);font-size:13px;}
 
@@ -259,7 +253,12 @@
 
   <div class="list-head">
     <span>Token</span>
-    <span id="sortToggle" onclick="toggleSort()">Price (USD) ⇅</span>
+    <div class="list-head-right">
+      <button class="liq-mode-btn" id="liqModeBtn" onclick="toggleLiquidityMode()" aria-label="Sort by liquidity" title="Sort by liquidity">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-3 4.5-7 9-7 13a7 7 0 0 0 14 0c0-4-4-8.5-7-13z"/></svg>
+      </button>
+      <span id="sortToggle" onclick="toggleSortDir()">Price (SDA) ↓</span>
+    </div>
   </div>
 
   <div class="list" id="list"></div>
@@ -267,12 +266,7 @@
 
 </div>
 
-<!-- Bottom nav is intentionally NOT included here — this page will
-     later be mounted as one of the tabs in the main app's own
-     bottom nav (see js/bottom-nav.js & <nav class="bottom-nav"
-     id="bottomNav"> in the real project), so no duplicate nav here. -->
-
-<!-- ===== BASE PICKER — choose which token is the base pair (SDA, FREEt, etc.) ===== -->
+<!-- ===== BASE PICKER ===== -->
 <div class="picker-overlay" id="basePickerOverlay" onclick="if(event.target===this) closeBasePicker()">
   <div class="picker-sheet">
     <div class="picker-head">
@@ -289,12 +283,7 @@
   </div>
 </div>
 
-<!-- ===== TOKEN DETAIL — contract address, price history sparkline, pool reserves.
-     Liquidity is fetched from PRICE_ENGINE.getPoolLiquidity(), which reuses the
-     SAME pool cache already warmed up by the main scan (see factory-engine.js
-     _poolDataCache) — so opening this right after a scan usually costs 0 extra
-     RPC calls, and even a cold fetch is still a single batched HTTP request,
-     not one call per value. ===== -->
+<!-- ===== TOKEN DETAIL ===== -->
 <div class="picker-overlay" id="tokenDetailOverlay" onclick="if(event.target===this) closeTokenDetail()">
   <div class="picker-sheet" style="max-height:88vh;">
     <div class="picker-head">
@@ -318,22 +307,6 @@
 <div class="copy-toast" id="copyToast">Address copied</div>
 
 <script>
-/* =========================================================
-   TOKEN DATA — loaded DIRECTLY from data/tokens.json, no more
-   hardcoded/embedded list. This file uses the SAME source as
-   the main wallet (see js/tokens.js -> loadDefaultTokens), so
-   adding/editing a token in data/tokens.json automatically
-   updates this price list too, no edits needed here.
-
-   Minimum shape per item:
-   { "symbol": "FREEt", "name": "Freelancium", "type": "erc20",
-     "address": "0x...", "decimals": 18, "icon": "freet.png" }
-
-   "icon" is just the filename (no "img/" prefix) — same as in
-   the main project's tokens.json, since the "img/" path is
-   prepended at render time (see renderList()).
-   ========================================================= */
-
 async function loadTokenList() {
   try {
     const res = await fetch("data/tokens.json");
@@ -353,32 +326,17 @@ async function loadTokenList() {
   }
 }
 
-/* =========================================================
-   LOCAL PRICE HISTORY (for the change % shown next to price)
-   PRICE_ENGINE doesn't store history — this is a device-local
-   snapshot.
-
-   NOTE: the user no longer has to wait a full 24h before any
-   change % shows up. get24hChange() now falls back to the
-   OLDEST snapshot on this device when a true 24h-old snapshot
-   isn't available yet — so a (labelled) change % appears within
-   a few minutes of the first couple of scans. Once 24h of real
-   history accumulates it automatically switches over to a true
-   24h change, no code path change needed.
-   ========================================================= */
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MIN_PARTIAL_AGE_MS = 3 * 60 * 1000;
 
-// URL Web App Apps Script — history harga sekarang global (dari Sheet),
-// bukan lagi per-device via localStorage.
 const HISTORY_API = "https://script.google.com/macros/s/AKfycbyjB5nxZMpMN7BrQoDFlrR-tQimj1bh6W5pkmaqIjn_nskhwjTGlVgCe4E4O-BauLDC/exec";
 
-let _historyCache = {}; // { symbol: [{t, p}, ...] } — diisi dari Sheet, dibaca banyak user
+let _historyCache = {};
 
 async function loadSharedHistory() {
   try {
     const res = await fetch(HISTORY_API + "?type=history");
-    const rows = await res.json(); // [{symbol, price, timestamp}, ...]
+    const rows = await res.json();
     const grouped = {};
     rows.forEach(r => {
       const sym = r.symbol;
@@ -397,10 +355,6 @@ function getHistoryFor(symbol) {
   return _historyCache[symbol] || [];
 }
 
-// Returns { pct, partial, ageMs } or null if there's nothing usable yet.
-// partial === true means "not a full 24h yet, this is since the oldest
-// snapshot we have" — the UI labels this differently (e.g. "· 12m")
-// so it's never confused with a true 24h number.
 function get24hChange(history, currentPrice) {
   if (!history || !history.length || !currentPrice) return null;
 
@@ -412,8 +366,6 @@ function get24hChange(history, currentPrice) {
     return { pct: ((currentPrice - ref.p) / ref.p) * 100, partial: false, ageMs: DAY_MS };
   }
 
-  // No full 24h of data yet — fall back to the oldest snapshot we do
-  // have, as long as it's old enough to not just be sampling noise.
   const earliest = history[0];
   const age = earliest ? Date.now() - earliest.t : 0;
   if (earliest && earliest.p && age >= MIN_PARTIAL_AGE_MS) {
@@ -431,17 +383,11 @@ function fmtDuration(ms) {
   return Math.round(hours / 24) + "d";
 }
 
-/* =========================================================
-   AGG_PRICE — fast batch scanner, same pattern as AGGREGATOR
-   (Promise.all per batch + delay between batches), but only
-   1 RPC call per token (not 4) and no liquidity check, since
-   this is a price list, not a swap execution.
-   ========================================================= */
 const AGG_PRICE = (() => {
 
-  const BATCH_SIZE   = 8;     // tokens processed concurrently per batch
-  const BATCH_DELAY  = 150;   // ms delay between batches — enough to not get public RPC blocked
-  const SCAN_TIMEOUT = 6000;  // ms — slow tokens are skipped, not holding up the whole scan
+  const BATCH_SIZE   = 8;
+  const BATCH_DELAY  = 150;
+  const SCAN_TIMEOUT = 6000;
 
   let _scanning = false;
   let _stopRequested = false;
@@ -488,10 +434,9 @@ const AGG_PRICE = (() => {
     document.getElementById("stopScanBtn").style.display = "inline-block";
 
     const allTokens = await loadTokenList();
-    await loadSharedHistory(); // ambil history 7 hari terakhir dari Sheet (global, sekali per scan)
+    await loadSharedHistory();
 
     if (!allTokens.length) {
-      // loadTokenList already shows the error message in emptyState
       _scanning = false;
       document.getElementById("statusDot").className = "dot off";
       document.getElementById("refreshBtn").classList.remove("spin");
@@ -502,24 +447,13 @@ const AGG_PRICE = (() => {
 
     window.TOKENS = allTokens;
 
-    // Candidate tokens to show/scan: native SDA + all ERC20s (including
-    // WSDA — now handled the same as any other token through
-    // PRICE_ENGINE instead of being hardcoded, so its rate stays correct
-    // even when the base pair is switched to a token other than SDA).
     const candidates = [
       { symbol: "SDA", name: "Sidra Digital Asset", icon: "sda.png", address: "native" },
       ...allTokens.filter(t => t.type === "erc20")
     ];
 
-    const base = state.base; // { address, symbol, name, icon }
+    const base = state.base;
 
-    // IMPORTANT: WSDA has no direct pool against "native" — WSDA IS the
-    // on-chain wrapped representation of SDA (not a separate trading
-    // pair), and every token/SDA pool is actually a token/WSDA pool
-    // under the hood (see normalize() in factory-engine.js). So WSDA
-    // must be treated exactly like "native" for every PRICE_ENGINE
-    // query, otherwise it would try to hit a WSDA/WSDA pool that never
-    // exists (always returning 0 / "no route" if not skipped like this).
     const isNativeLike = (t) => t.address === "native" || t.symbol === "WSDA";
     const engineAddr   = (t) => isNativeLike(t) ? "native" : t.address;
 
@@ -527,12 +461,10 @@ const AGG_PRICE = (() => {
     const baseEngineAddr = engineAddr(base);
     const baseAddrLower = base.address.toLowerCase();
 
-    // The token currently set as the base is not shown as a row (rate would trivially be 1:1)
     const list = candidates.filter(t => t.address.toLowerCase() !== baseAddrLower);
 
     const sdaPrice = TOKEN_PRICE_USD["SDA"] || 0;
 
-    // USD price of the base pair itself (used for the "1 {BASE} = $..." banner)
     let baseUsdPrice = sdaPrice;
     if (!isBaseNative) {
       try {
@@ -543,11 +475,13 @@ const AGG_PRICE = (() => {
     const baseNativeRatioForChange = isBaseNative ? 1 : (await PRICE_ENGINE.getPrice(baseEngineAddr, "native")) || 0;
     updateBaseBanner(baseUsdPrice, get24hChange(getHistoryFor(base.symbol), baseNativeRatioForChange));
 
-    // All rows start "pending" — rendered right away so the list looks
-    // full from the start, then filled in one by one as each batch finishes
+    // liqBase/liqToken deliberately start "undefined" (not null) — that's
+    // how ensureLiquidityData() tells "never fetched yet" apart from
+    // "fetched, but no pool found" (null).
     state.rows = list.map(t => ({
       address: t.address, symbol: t.symbol, name: t.name, icon: t.icon,
-      rate: null, usdPrice: null, change: null, pending: true
+      rate: null, usdPrice: null, change: null, pending: true,
+      liqBase: undefined, liqToken: undefined
     }));
     renderList();
 
@@ -565,16 +499,10 @@ const AGG_PRICE = (() => {
           const tokenIsNativeLike = isNativeLike(t);
           const tokenEngineAddr = engineAddr(t);
 
-          // Rate vs SDA — always computed, used for the USD column & sorting,
-          // regardless of the active base pair. WSDA/SDA itself = 1, no RPC needed.
           const nativeRatioPromise = tokenIsNativeLike
             ? Promise.resolve(1)
             : withTimeout(PRICE_ENGINE.getPrice(tokenEngineAddr, "native"), SCAN_TIMEOUT);
 
-          // Rate vs the currently active base pair — if the base is
-          // SDA/WSDA, just reuse nativeRatio (saves 1 RPC call & avoids
-          // the nonexistent WSDA/WSDA pool). If the base is another
-          // token, PRICE_ENGINE already multihops via WSDA automatically.
           const baseRatioPromise = isBaseNative
             ? (tokenIsNativeLike ? Promise.resolve(1) : nativeRatioPromise)
             : withTimeout(PRICE_ENGINE.getPrice(tokenEngineAddr, baseEngineAddr), SCAN_TIMEOUT);
@@ -617,6 +545,13 @@ const AGG_PRICE = (() => {
       setStatus("Live · Sidra Chain", true);
     }
     renderList();
+
+    // Kalau user sedang di mode sort Liquidity waktu scan/rescan ini
+    // terjadi, data liquiditas row baru butuh di-fetch ulang (row objects
+    // baru semuanya "undefined") — lakukan otomatis di background.
+    if (state.sortBy === "liquidity") {
+      ensureLiquidityData();
+    }
   }
 
   function stopScan() {
@@ -635,10 +570,6 @@ const AGG_PRICE = (() => {
     scanAll();
   }
 
-  // Used when switching the base pair: if an old scan is still running,
-  // request it to stop and wait until it has truly finished before
-  // starting a new one — so two scans don't both write to state.rows
-  // at the same time.
   function restart() {
     _stopRequested = true;
     const wait = () => {
@@ -651,11 +582,9 @@ const AGG_PRICE = (() => {
   return { scanAll, stopScan, rescan, restart };
 })();
 
-/* =========================================================
-   STATE + RENDER
-   ========================================================= */
 let state = {
   filter: "all",
+  sortBy: "price",     // "price" | "liquidity"
   sortDir: "desc",
   rows: [],
   showNoRoute: false,
@@ -689,6 +618,14 @@ function fmtUsd(n){
   return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: n < 1 ? 6 : 2 });
 }
 
+// Formatter angka reserve mentah (dipakai mode sort Liquidity) — beda dari
+// fmtUsd karena ini bukan uang, jadi tanpa tanda "$" dan tanpa minimum 2 desimal.
+function fmtLiqNum(n){
+  if (n === null || n === undefined || !isFinite(n)) return "…";
+  if (n < 0.01) return n.toExponential(2);
+  return n.toLocaleString("en-US", { maximumFractionDigits: n < 1000 ? 4 : 0 });
+}
+
 function setStatus(text, ok){
   document.getElementById("statusText").textContent = text;
   document.getElementById("statusDot").className = "dot" + (ok ? "" : " off");
@@ -706,6 +643,8 @@ function updateBaseBanner(baseUsdPrice, baseChange){
   document.getElementById("baseChipSymbol").textContent = state.base.symbol;
   document.getElementById("baseChipIcon").src = "img/" + (state.base.icon || "default.png");
   document.getElementById("baseChipIcon").style.display = "";
+
+  updateSortLabel();
 
   const el = document.getElementById("baseChange");
   if (baseChange === null) {
@@ -730,25 +669,124 @@ function setFilter(f, el){
   renderList();
 }
 
-function toggleSort(){
-  state.sortDir = state.sortDir === "desc" ? "asc" : "desc";
-  document.getElementById("sortToggle").textContent = "Price (USD) " + (state.sortDir === "desc" ? "↓" : "↑");
+// Label header sort + state tombol droplet — dipisah dari fungsi toggle
+// supaya bisa dipanggil ulang dari updateBaseBanner() tiap kali base pair
+// berganti (simbolnya ikut berubah).
+function updateSortLabel(){
+  const el = document.getElementById("sortToggle");
+  if (el) {
+    const arrow = state.sortDir === "desc" ? "↓" : "↑";
+    el.textContent = (state.sortBy === "liquidity" ? "Liquidity (" : "Price (") + state.base.symbol + ") " + arrow;
+  }
+
+  const btn = document.getElementById("liqModeBtn");
+  if (btn) btn.classList.toggle("active", state.sortBy === "liquidity");
+}
+
+// Tombol droplet — kontrol TERPISAH khusus untuk ganti mode Price <-> Liquidity,
+// supaya fitur ini kelihatan sebagai kontrol sendiri (bukan disembunyikan di
+// dalam cycle tap yang sama dengan sort harga, yang bikin user tidak sadar
+// fitur ini ada). Ganti mode selalu reset ke arah "desc" (paling likuid dulu).
+function toggleLiquidityMode(){
+  state.sortBy = state.sortBy === "liquidity" ? "price" : "liquidity";
+  state.sortDir = "desc";
+
+  if (state.sortBy === "liquidity") ensureLiquidityData();
+
+  updateSortLabel();
 
   if (typeof gtag === "function") {
-    gtag('event', 'sort_toggle', { direction: state.sortDir });
+    gtag('event', 'liquidity_mode_toggle', { active: state.sortBy === "liquidity" });
   }
 
   renderList();
+}
+
+// Tap di teks label — cuma balik arah naik/turun untuk mode yang SEDANG aktif,
+// tidak ikut mengganti mode (itu tugas tombol droplet).
+function toggleSortDir(){
+  state.sortDir = state.sortDir === "desc" ? "asc" : "desc";
+
+  updateSortLabel();
+
+  if (typeof gtag === "function") {
+    gtag('event', 'sort_toggle', { by: state.sortBy, direction: state.sortDir });
+  }
+
+  renderList();
+}
+
+// =========================================================
+// LIQUIDITY DATA (untuk mode sort "Liquidity")
+// Cache-first lewat PRICE_ENGINE.getPoolLiquidity() — sama persis yang
+// dipakai modal detail token, jadi kalau datanya sudah pernah kepanggil
+// (misal user baru buka 1 token), token itu 0 RPC call tambahan di sini.
+// =========================================================
+let _liqDataLoading = false;
+
+async function _fetchRowLiquidity(row){
+  const tokenEngine = _engineAddrOf(row);
+  const baseEngine = _engineAddrOf(state.base);
+  if (tokenEngine === baseEngine) return null; // base pair itu sendiri
+
+  try {
+    const liq = await PRICE_ENGINE.getPoolLiquidity(tokenEngine, baseEngine);
+    if (!liq) return null;
+
+    const dec0 = _decimalsForAddr(liq.token0);
+    const dec1 = _decimalsForAddr(liq.token1);
+    const r0 = liq.reserve0 / (10 ** dec0);
+    const r1 = liq.reserve1 / (10 ** dec1);
+
+    const isTokenSide0 = tokenEngine.toLowerCase() === liq.token0.toLowerCase();
+    return {
+      tokenAmt: isTokenSide0 ? r0 : r1,
+      baseAmt:  isTokenSide0 ? r1 : r0
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+async function ensureLiquidityData(){
+  if (_liqDataLoading) return;
+
+  // Cuma ambil row yang belum pernah di-fetch sama sekali (liqBase === undefined).
+  // Row yang sudah null (dicoba, tidak ada pool) tidak diulang terus-menerus.
+  const targets = state.rows.filter(r => !r.pending && !r.failed && r.liqBase === undefined);
+  if (!targets.length) return;
+
+  _liqDataLoading = true;
+
+  const BATCH = 8;
+  const DELAY = 150;
+
+  for (let i = 0; i < targets.length; i += BATCH) {
+    // Kalau user sudah pindah balik ke mode Price di tengah proses, hentikan —
+    // tidak perlu lanjut fetch untuk mode yang sudah tidak aktif.
+    if (state.sortBy !== "liquidity") break;
+
+    const batch = targets.slice(i, i + BATCH);
+    await Promise.all(batch.map(async (row) => {
+      const res = await _fetchRowLiquidity(row);
+      row.liqBase = res ? res.baseAmt : null;
+      row.liqToken = res ? res.tokenAmt : null;
+    }));
+
+    if (state.sortBy === "liquidity") renderList(); // progressive, biar list keisi pelan-pelan
+
+    if (i + BATCH < targets.length) {
+      await new Promise(r => setTimeout(r, DELAY));
+    }
+  }
+
+  _liqDataLoading = false;
 }
 
 function renderList(){
   const q = document.getElementById("searchInput").value.trim().toLowerCase();
   let rows = state.rows.slice();
 
-  // "no route" tokens (no pool found against the current base pair) are
-  // hidden by default — they clutter the list and there's nothing
-  // actionable to show for them. A small toggle at the bottom lets the
-  // user bring them back if they want to see which tokens have no pool.
   const noRouteCount = rows.filter(t => t.failed).length;
   if (!state.showNoRoute) rows = rows.filter(t => !t.failed);
 
@@ -756,7 +794,13 @@ function renderList(){
   if (state.filter === "gainers") rows = rows.filter(t => t.change !== null && t.change.pct > 0);
   if (state.filter === "losers") rows = rows.filter(t => t.change !== null && t.change.pct < 0);
 
+  const isLiqMode = state.sortBy === "liquidity";
+
   rows.sort((a,b) => {
+    if (isLiqMode) {
+      const av = a.liqBase ?? -1, bv = b.liqBase ?? -1;
+      return state.sortDir === "desc" ? bv - av : av - bv;
+    }
     const av = a.usdPrice ?? -1, bv = b.usdPrice ?? -1;
     return state.sortDir === "desc" ? bv - av : av - bv;
   });
@@ -794,23 +838,38 @@ function renderList(){
   empty.style.display = "none";
 
   rows.forEach((t, idx) => {
-    const up = t.change === null ? null : t.change.pct >= 0;
-    const changeClass = up === null ? "flat" : (up ? "up" : "down");
-    const changeText = t.pending ? "…" : t.failed ? "no route" :
-      t.change === null ? "waiting for data" :
-      (up ? "↑ " : "↓ ") + Math.abs(t.change.pct).toFixed(1) + "%" + (t.change.partial ? (" ·" + fmtDuration(t.change.ageMs)) : "");
-
-    // Icon path matches the main project: img/ folder, not assets/icons/.
-    // If the "icon" field is empty, fall back to img/default.png first
-    // before finally falling back to a colored initial avatar (onerror below).
     const iconFile = t.icon || "default.png";
 
-    const rateText = t.pending ? "…" : t.failed || t.rate === null ? "no route" : fmtRate(t.rate, state.base.symbol);
-    const usdText  = t.pending ? "" : t.failed ? "" : fmtUsd(t.usdPrice);
-
     const row = document.createElement("div");
-    row.className = "row" + (t.pending ? " pending" : "") + (t.failed ? " failed" : "");
+    row.className = "row" + (t.pending ? " pending" : "") + (t.failed ? " failed" : "") + (isLiqMode ? " liq-row" : "");
     row.onclick = () => openToken(t.symbol);
+
+    let rightHtml;
+
+    if (isLiqMode) {
+      // Mode Liquidity: kolom kanan row atas dikosongkan sengaja — semua
+      // angka dipindah ke bawah bar (lihat blok setelah list.appendChild(row)
+      // di bawah), supaya baris atas (icon/symbol/nama) tidak sesak berebut
+      // tempat dengan angka reserve yang bisa panjang.
+      rightHtml = "";
+    } else {
+      const up = t.change === null ? null : t.change.pct >= 0;
+      const changeClass = up === null ? "flat" : (up ? "up" : "down");
+      const changeText = t.pending ? "…" : t.failed ? "no route" :
+        t.change === null ? "waiting for data" :
+        (up ? "↑ " : "↓ ") + Math.abs(t.change.pct).toFixed(1) + "%" + (t.change.partial ? (" ·" + fmtDuration(t.change.ageMs)) : "");
+
+      const rateText = t.pending ? "…" : t.failed || t.rate === null ? "no route" : fmtRate(t.rate, state.base.symbol);
+      const usdText  = t.pending ? "" : t.failed ? "" : fmtUsd(t.usdPrice);
+
+      rightHtml = `
+        <div class="token-price num">${rateText}</div>
+        <div class="token-sub-row">
+          ${usdText ? `<span class="token-usd num">${usdText}</span>` : ""}
+          <span class="token-change ${changeClass}">${changeText}</span>
+        </div>`;
+    }
+
     row.innerHTML = `
       <div class="row-left">
         <div class="token-rank">${idx + 1}</div>
@@ -822,13 +881,54 @@ function renderList(){
         </div>
       </div>
       <div class="row-right">
-        <div class="token-price num">${rateText}</div>
-        <div class="token-sub-row">
-          ${usdText ? `<span class="token-usd num">${usdText}</span>` : ""}
-          <span class="token-change ${changeClass}">${changeText}</span>
-        </div>
+        ${rightHtml}
       </div>`;
     list.appendChild(row);
+
+    // Bar dua warna sebagai indikator liquiditas, dengan angka reserve
+    // ditempel LANGSUNG di bawahnya — kiri mepet kiri (sisi token, titik
+    // biru), kanan mepet kanan (sisi base pair, titik amber) — supaya baris
+    // atas tetap lega dan dua angka itu tidak berebut tempat sempit lagi.
+    //
+    // Lebar bar di sini SENGAJA proporsional ke RASIO JUMLAH TOKEN MENTAH
+    // (bukan nilai/value) — atas keputusan sadar user bahwa secara nilai,
+    // kedua sisi pool constant-product selalu setara persis (50:50), jadi
+    // kalau mau bar-nya bervariasi secara visual, satu-satunya cara adalah
+    // pakai rasio kuantitas mentah, meski itu tidak merepresentasikan
+    // ketimpangan ekonomi apa pun — cuma kebetulan beda suplai/desimal
+    // antar token.
+    if (isLiqMode) {
+      const barWrap = document.createElement("div");
+      barWrap.className = "liq-row-bar-wrap";
+
+      if (t.liqBase === undefined) {
+        barWrap.innerHTML = `<div class="liq-bar-status">Loading liquidity…</div>`;
+      } else if (t.liqBase === null) {
+        barWrap.innerHTML = `<div class="liq-bar-status">No pool found vs ${state.base.symbol}</div>`;
+      } else {
+        const tokenAmt = fmtLiqNum(t.liqToken) + " " + t.symbol;
+        const baseAmt = fmtLiqNum(t.liqBase) + " " + state.base.symbol;
+
+        // Rasio kuantitas mentah, dengan lebar minimum 6% tiap sisi supaya
+        // sisi yang jauh lebih kecil tetap kelihatan sebagai garis tipis,
+        // bukan hilang sama sekali.
+        const total = (t.liqToken || 0) + (t.liqBase || 0);
+        let pctToken = total > 0 ? (t.liqToken / total) * 100 : 50;
+        pctToken = Math.max(6, Math.min(94, pctToken));
+        const pctBase = 100 - pctToken;
+
+        barWrap.innerHTML = `
+          <div class="liq-row-bar">
+            <div class="liq-row-bar-a" style="width:${pctToken.toFixed(1)}%;"></div>
+            <div class="liq-row-bar-b" style="width:${pctBase.toFixed(1)}%;"></div>
+          </div>
+          <div class="liq-bar-labels num">
+            <span><span class="dot" style="background:#4fa3e3;"></span>${tokenAmt}</span>
+            <span><span class="dot" style="background:var(--amber);"></span>${baseAmt}</span>
+          </div>`;
+      }
+      list.appendChild(barWrap);
+    }
   });
 
   if (noRouteCount > 0) {
@@ -854,40 +954,19 @@ function openToken(symbol){
   else console.log("Open token detail:", symbol);
 }
 
-/* =========================================================
-   TOKEN DETAIL MODAL
-   Shows: contract address (copyable), a local price-history
-   sparkline, and pool reserves/liquidity vs the current base pair.
+let _detailToken = null;
+let _liqRequestId = 0;
 
-   Liquidity comes straight from PRICE_ENGINE.getPoolLiquidity(),
-   which is already cache-first (see factory-engine.js _poolDataCache
-   / _liqCache) — so this almost never fires a fresh RPC call on its
-   own if the main scan warmed the cache recently. When it does need
-   fresh data, factory-engine.js still batches it into one HTTP POST
-   (not one request per pool field), same as the rest of the app.
-   ========================================================= */
-
-let _detailToken = null; // the row currently shown in the modal, used to guard stale async results
-let _liqRequestId = 0;   // bumped on every fetch attempt, so overlapping calls for the same token don't both paint
-
-// Auto-refresh history from the Sheet every 5 minutes (matches the
-// Sheet's own save interval) — only refetches history (light, no RPC),
-// and only re-renders the chart if a detail modal is currently open.
-// Does NOT touch on-chain rate/liquidity — those still need a manual
-// rescan since they cost RPC calls.
 const HISTORY_REFRESH_MS = 5 * 60 * 1000;
 let _lastHistoryRefreshAt = Date.now();
 
 function startHistoryAutoRefresh(){
-  // Tick every 15s just to keep the "Updated Xm ago" text live between refreshes.
   setInterval(updateRefreshIndicatorText, 15000);
 
   setInterval(async () => {
     await loadSharedHistory();
     _lastHistoryRefreshAt = Date.now();
 
-    // Refresh the "change %" badges in the list using the new history,
-    // without re-querying the chain.
     state.rows.forEach(r => {
       if (r.usdPrice === null) return;
       const sdaPrice = (typeof TOKEN_PRICE_USD !== "undefined" ? TOKEN_PRICE_USD["SDA"] : 0) || 0;
@@ -895,7 +974,6 @@ function startHistoryAutoRefresh(){
       r.change = get24hChange(getHistoryFor(r.symbol), nativeRatio);
     });
 
-    // Refresh base banner change% juga, biar sinkron sama badge di list
     const isBaseNative = state.base.address === "native" || state.base.symbol === "WSDA";
     const baseNativeRatio = isBaseNative ? 1 : (await PRICE_ENGINE.getPrice(_engineAddrOf(state.base), "native")) || 0;
     const sdaPriceNow = (typeof TOKEN_PRICE_USD !== "undefined" ? TOKEN_PRICE_USD["SDA"] : 0) || 0;
@@ -904,13 +982,12 @@ function startHistoryAutoRefresh(){
 
     renderList();
 
-    // If a token detail modal is open, refresh its chart + label too.
     if (_detailToken) {
       const fresh = state.rows.find(r => r.symbol === _detailToken.symbol);
       if (fresh) {
         _detailToken = fresh;
-        renderTokenDetail(fresh); // resets liquidity box to "Loading…" placeholder
-        loadTokenDetailLiquidity(fresh); // so we re-fetch it right after — cheap, cache-first
+        renderTokenDetail(fresh);
+        loadTokenDetailLiquidity(fresh);
         flashRefreshIndicator();
       }
     }
@@ -919,7 +996,7 @@ function startHistoryAutoRefresh(){
 
 function updateRefreshIndicatorText(){
   const el = document.getElementById("refreshIndicatorText");
-  if (!el) return; // modal not open right now
+  if (!el) return;
   const secs = Math.round((Date.now() - _lastHistoryRefreshAt) / 1000);
   el.textContent = secs < 60 ? "Updated just now" : "Updated " + fmtDuration(secs * 1000) + " ago";
 }
@@ -932,9 +1009,6 @@ function flashRefreshIndicator(){
   updateRefreshIndicatorText();
 }
 
-// Same native/WSDA handling as AGG_PRICE — WSDA has no direct WSDA/WSDA
-// pool, it must be queried through PRICE_ENGINE as "native" (see the
-// comment on isNativeLike in AGG_PRICE above).
 function _isNativeLikeToken(t){
   return t.address === "native" || t.symbol === "WSDA";
 }
@@ -963,7 +1037,6 @@ function openTokenDetail(symbol){
   renderTokenDetail(row);
   updateRefreshIndicatorText();
 
-  // GA4 tracking — dipanggil tepat sebelum modal dibuka
   if (typeof gtag === "function") {
     gtag('event', 'open_chart', {
       token: row.symbol
@@ -1041,15 +1114,7 @@ function shareApp(){
   }
 }
 
-// Sparkline built from the same shared history used for the change % —
-// no extra data source, just a visual on top of what's already recorded.
-// Axis now shows up to 7 evenly-spaced day labels (weekday abbreviations),
-// staggered up/down (zig-zag) so they never collide even on a narrow
-// mobile screen — see "Version C" mockup discussed with the user.
 function downsampleHistory(history, maxPoints){
-  // Ambil titik yang disebar MERATA ke seluruh rentang waktu history,
-  // bukan cuma N titik terakhir — supaya chart tetap mewakili seluruh
-  // riwayat (7 hari) meski snapshot-nya rapat (banyak per jam).
   if (history.length <= maxPoints) return history;
   const result = [];
   for (let i = 0; i < maxPoints; i++){
@@ -1087,8 +1152,6 @@ function buildSparkline(history){
 
   const fmtP = (n) => n < 0.01 ? n.toExponential(2) : n.toLocaleString("en-US", { maximumFractionDigits: n < 1 ? 6 : 4 });
 
-  // Pick up to 7 evenly-spaced points across the available history to
-  // use as axis tick marks + labels (fewer if less history exists yet).
   const AXIS_COUNT = Math.min(7, pts.length);
   const axisIdx = [];
   for (let i = 0; i < AXIS_COUNT; i++) {
@@ -1108,12 +1171,8 @@ function buildSparkline(history){
     return `<line x1="${c.x.toFixed(1)}" y1="${chH - botPad}" x2="${c.x.toFixed(1)}" y2="${chH - botPad + 4}" stroke="var(--text-muted)" stroke-width="1"/>`;
   }).join("");
 
-  // Label harga di titik terakhir — ditempel di kanan titik kalau
-  // masih cukup ruang, kalau titiknya terlalu mepet ke pinggir kanan
-  // (misal history-nya cuma sedikit titik), label dipindah ke kiri
-  // titik supaya tidak kepotong keluar viewBox.
   const lastLabel = fmtP(prices[prices.length - 1]);
-  const lastLabelW = lastLabel.length * 5.5 + 6; // perkiraan lebar teks
+  const lastLabelW = lastLabel.length * 5.5 + 6;
   const spaceRight = w - pad - last.x;
   const lastLabelIsRight = spaceRight >= lastLabelW + 6;
   const lastLabelX = lastLabelIsRight ? last.x + 6 : last.x - 6;
@@ -1213,7 +1272,7 @@ async function loadTokenDetailLiquidity(row){
   const liqEl = document.getElementById("detailLiquidity");
   if (!liqEl) return;
 
-  const myRequestId = ++_liqRequestId; // this call "owns" the latest request
+  const myRequestId = ++_liqRequestId;
 
   const tokenEngine = _engineAddrOf(row);
   const baseEngine = _engineAddrOf(state.base);
@@ -1226,10 +1285,6 @@ async function loadTokenDetailLiquidity(row){
   try {
     const liq = await PRICE_ENGINE.getPoolLiquidity(tokenEngine, baseEngine);
 
-    // The user may have closed the modal, opened a different token, or a
-    // newer fetch for the SAME token may have started (e.g. click + the
-    // 5-min auto-refresh overlapping) — only the most recent request for
-    // this token is allowed to paint.
     if (!_detailToken || _detailToken.symbol !== row.symbol) return;
     if (myRequestId !== _liqRequestId) return;
 
@@ -1265,17 +1320,14 @@ async function loadTokenDetailLiquidity(row){
   }
 }
 
-/* =========================================================
-   BASE PICKER — switch the base pair (e.g. SDA -> FREEt), then
-   trigger a rescan so every rate is recomputed relative to the
-   new base via PRICE_ENGINE.getPrice (auto-multihops via WSDA
-   when there's no direct pool).
-   ========================================================= */
 function _basePickerCandidates(){
   const all = window.TOKENS || [];
   return [
     { symbol: "SDA", name: "Sidra Digital Asset", icon: "sda.png", address: "native" },
-    ...all.filter(t => t.type === "erc20")
+    // WSDA disembunyikan dari base picker — itu cuma representasi wrapped
+    // dari SDA native yang sudah ada di atas, jadi kalau ikut ditampilkan
+    // di sini cuma bikin dobel/bingung (dua opsi untuk hal yang sama).
+    ...all.filter(t => t.type === "erc20" && t.symbol !== "WSDA")
   ];
 }
 
