@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://masatos007.github.io/SidraDEX-Live-Prices/sitemap.xml
