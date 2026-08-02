@@ -131,6 +131,28 @@
 
   .empty,.loading{text-align:center;padding:40px 10px;color:var(--text-muted);font-size:13px;}
 
+/* ===== SKELETON LOADING ===== */
+.skeleton-row{display:flex;align-items:center;justify-content:space-between;padding:11px 4px;border-bottom:1px solid var(--border);}
+.skeleton-row:last-child{border-bottom:none;}
+.skeleton-left{display:flex;align-items:center;gap:11px;}
+.skeleton-icon{width:34px;height:34px;border-radius:50%;flex-shrink:0;}
+.skeleton-lines{display:flex;flex-direction:column;gap:6px;}
+.skeleton-line{height:10px;border-radius:4px;}
+.skeleton-line.w1{width:70px;}
+.skeleton-line.w2{width:110px;}
+.skeleton-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;}
+.skeleton-line.w3{width:60px;}
+.skeleton-line.w4{width:80px;}
+.skeleton-icon,.skeleton-line{
+  background:linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 37%, var(--surface-2) 63%);
+  background-size:400% 100%;
+  animation:skeletonShine 1.4s ease infinite;
+}
+@keyframes skeletonShine{
+  0%{background-position:100% 50%;}
+  100%{background-position:0 50%;}
+}
+
   /* ===== BASE PICKER OVERLAY ===== */
   .picker-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;z-index:1000;}
   .picker-overlay.open{display:flex;}
@@ -432,6 +454,8 @@ const AGG_PRICE = (() => {
     document.getElementById("statusText").textContent = "Scanning...";
     document.getElementById("refreshBtn").classList.add("spin");
     document.getElementById("stopScanBtn").style.display = "inline-block";
+
+    renderSkeleton(8);
 
     const allTokens = await loadTokenList();
     await loadSharedHistory();
@@ -781,6 +805,30 @@ async function ensureLiquidityData(){
   }
 
   _liqDataLoading = false;
+}
+
+function renderSkeleton(count){
+  const list = document.getElementById("list");
+  const empty = document.getElementById("emptyState");
+  empty.style.display = "none";
+  list.innerHTML = "";
+  for (let i = 0; i < count; i++){
+    const row = document.createElement("div");
+    row.className = "skeleton-row";
+    row.innerHTML = `
+      <div class="skeleton-left">
+        <div class="skeleton-icon"></div>
+        <div class="skeleton-lines">
+          <div class="skeleton-line w1"></div>
+          <div class="skeleton-line w2"></div>
+        </div>
+      </div>
+      <div class="skeleton-right">
+        <div class="skeleton-line w3"></div>
+        <div class="skeleton-line w4"></div>
+      </div>`;
+    list.appendChild(row);
+  }
 }
 
 function renderList(){
