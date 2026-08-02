@@ -1004,6 +1004,7 @@ function openToken(symbol){
 
 let _detailToken = null;
 let _liqRequestId = 0;
+let _volRequestId = 0;
 
 const HISTORY_REFRESH_MS = 5 * 60 * 1000;
 let _lastHistoryRefreshAt = Date.now();
@@ -1036,6 +1037,7 @@ function startHistoryAutoRefresh(){
         _detailToken = fresh;
         renderTokenDetail(fresh);
         loadTokenDetailLiquidity(fresh);
+        loadTokenDetailVolume(fresh);
         flashRefreshIndicator();
       }
     }
@@ -1093,6 +1095,7 @@ function openTokenDetail(symbol){
 
   document.getElementById("tokenDetailOverlay").classList.add("open");
   loadTokenDetailLiquidity(row);
+  loadTokenDetailVolume(row);
 }
 window.openTokenDetail = openTokenDetail;
 
@@ -1313,6 +1316,11 @@ function renderTokenDetail(row){
       <div class="detail-label">Liquidity pool (vs ${state.base.symbol})</div>
       <div id="detailLiquidity"><div class="detail-loading">Loading liquidity…</div></div>
     </div>
+
+    <div class="detail-section">
+      <div class="detail-label">Volume (24h, vs ${state.base.symbol})</div>
+      <div id="detailVolume"><div class="detail-loading">Loading volume…</div></div>
+    </div>
   `;
 }
 
@@ -1364,6 +1372,78 @@ async function loadTokenDetailLiquidity(row){
   } catch (e) {
     if (_detailToken && _detailToken.symbol === row.symbol && myRequestId === _liqRequestId) {
       liqEl.innerHTML = `<div class="detail-loading">Failed to load liquidity: ${e.message || e}</div>`;
+    }
+  }
+}
+
+async function loadTokenDetailVolume(row){
+  const volEl = document.getElementById("detailVolume");
+  if (!volEl) return;
+
+  const myRequestId = ++_volRequestId;
+
+  const tokenEngine = _engineAddrOf(row);
+  const baseEngine = _engineAddrOf(state.base);
+
+  if (tokenEngine === baseEngine) {
+    volEl.innerHTML = `<div class="detail-loading">This token IS the base pair (or its native equivalent) — no pool to show.</div>`;
+    return;
+  }
+
+  try {
+    const vol = await PRICE_ENGINE.getPoolVolume24h(tokenEngine, baseEngine);
+
+    if (!_detailToken || _detailToken.symbol !== row.symbol) return;
+    if (myRequestId !== _volRequestId) return;
+
+    if (!vol) {
+      volEl.innerHTML = `<div class="detail-loading">No direct pool found between ${row.symbol} and ${state.base.symbol}.</div>`;
+      return;
+    }
+
+    const dec0 = _decimalsForAddr(vol.token0);
+    const dec1 = _decimalsForAddr(vol.token1);
+    const sym0 = _symbolForAddr(vol.token0);
+    const sym1 = _symbolForAddr(vol.token1);
+
+    const v0 = Number(ethers.utils.formatUnits(vol.volume0, dec0));
+    const v1 = Number(ethers.utils.formatUnits(vol.volume1, dec1));
+
+    const isTokenSide0 = tokenEngine.toLowerCase() === vol.token0.toLowerCase();
+    const tokenSideVol = isTokenSide0 ? v0 : v1;
+    const usdEst = row.usdPrice ? ("≈ " + fmtUsd(tokenSideVol * row.usdPrice)) : "";
+
+    const buyRaw  = isTokenSide0 ? vol.buy0  : vol.buy1;
+    const sellRaw = isTokenSide0 ? vol.sell0 : vol.sell1;
+    const buyAmt  = Number(ethers.utils.formatUnits(buyRaw,  isTokenSide0 ? dec0 : dec1));
+    const sellAmt = Number(ethers.utils.formatUnits(sellRaw, isTokenSide0 ? dec0 : dec1));
+    const totalAmt = buyAmt + sellAmt;
+    const pctBuy  = totalAmt > 0 ? Math.max(0, Math.min(100, (buyAmt / totalAmt) * 100)) : 50;
+    const pctSell = 100 - pctBuy;
+    const tokenSym = isTokenSide0 ? sym0 : sym1;
+
+    volEl.innerHTML = `
+      <div class="liq-grid">
+        <div class="liq-box"><div class="liq-val num">${fmtLiqNum(v0)}</div><div class="liq-lbl">${sym0}</div></div>
+        <div class="liq-box"><div class="liq-val num">${fmtLiqNum(v1)}</div><div class="liq-lbl">${sym1}</div></div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">
+        ${vol.txCount} swap${vol.txCount === 1 ? "" : "s"} in ~24h${usdEst ? " &middot; " + usdEst : ""}
+      </div>
+      <div style="margin-top:12px;">
+        <div style="height:6px;border-radius:3px;overflow:hidden;display:flex;">
+          <div style="width:${pctBuy.toFixed(1)}%;background:var(--green);"></div>
+          <div style="width:${pctSell.toFixed(1)}%;background:var(--red);"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;">
+          <span style="color:var(--green);">Buy: ${fmtLiqNum(buyAmt)} ${tokenSym} (${pctBuy.toFixed(0)}%)</span>
+          <span style="color:var(--red);">Sell: ${fmtLiqNum(sellAmt)} ${tokenSym} (${pctSell.toFixed(0)}%)</span>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    if (_detailToken && _detailToken.symbol === row.symbol && myRequestId === _volRequestId) {
+      volEl.innerHTML = `<div class="detail-loading">Failed to load volume: ${e.message || e}</div>`;
     }
   }
 }
