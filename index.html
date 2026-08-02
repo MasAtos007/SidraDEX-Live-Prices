@@ -503,6 +503,7 @@ const AGG_PRICE = (() => {
       } catch { baseUsdPrice = 0; }
     }
     const baseNativeRatioForChange = isBaseNative ? 1 : (await PRICE_ENGINE.getPrice(baseEngineAddr, "native")) || 0;
+    window._baseUsdPriceCache = baseUsdPrice;
     updateBaseBanner(baseUsdPrice, get24hChange(getHistoryFor(base.symbol), baseNativeRatioForChange));
 
     // liqBase/liqToken deliberately start "undefined" (not null) — that's
@@ -801,6 +802,13 @@ async function ensureLiquidityData(){
       const res = await _fetchRowLiquidity(row);
       row.liqBase = res ? res.baseAmt : null;
       row.liqToken = res ? res.tokenAmt : null;
+      // Nilai gabungan kedua sisi, dikonversi ke satuan SDA — pakai
+      // row.rate (harga token dalam SDA) yang sudah ada dari hasil scan
+      // harga, bukan asumsi 50:50 sempurna (pool V3 bisa sedikit
+      // meleset dari itu tergantung posisi harga saat ini di kurva).
+      row.liqValue = (res && row.rate)
+        ? res.baseAmt + (res.tokenAmt * row.rate)
+        : (res ? res.baseAmt * 2 : null); // fallback kalau rate belum ada
     }));
 
     if (state.sortBy === "liquidity") renderList(); // progressive, biar list keisi pelan-pelan
@@ -852,7 +860,7 @@ function renderList(){
 
   rows.sort((a,b) => {
     if (isLiqMode) {
-      const av = a.liqBase ?? -1, bv = b.liqBase ?? -1;
+      const av = a.liqValue ?? -1, bv = b.liqValue ?? -1;
       return state.sortDir === "desc" ? bv - av : av - bv;
     }
     const av = a.usdPrice ?? -1, bv = b.usdPrice ?? -1;
@@ -974,6 +982,13 @@ function renderList(){
         pctToken = Math.max(6, Math.min(94, pctToken));
         const pctBase = 100 - pctToken;
 
+        const tvlUsd = (t.liqValue !== null && t.liqValue !== undefined && window._baseUsdPriceCache)
+          ? fmtUsd(t.liqValue * window._baseUsdPriceCache)
+          : "";
+        const totalValueText = t.liqValue !== null && t.liqValue !== undefined
+          ? "TVL: " + fmtLiqNum(t.liqValue) + " " + state.base.symbol + (tvlUsd ? " (" + tvlUsd + ")" : "")
+          : "";
+
         barWrap.innerHTML = `
           <div class="liq-row-bar">
             <div class="liq-row-bar-a" style="width:${pctToken.toFixed(1)}%;"></div>
@@ -982,7 +997,8 @@ function renderList(){
           <div class="liq-bar-labels num">
             <span><span class="dot" style="background:#4fa3e3;"></span>${tokenAmt}</span>
             <span><span class="dot" style="background:var(--amber);"></span>${baseAmt}</span>
-          </div>`;
+          </div>
+          ${totalValueText ? `<div style="margin-left:61px;margin-top:3px;font-size:10.5px;color:var(--text-muted);">${totalValueText}</div>` : ""}`;
       }
       list.appendChild(barWrap);
     }
