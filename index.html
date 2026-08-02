@@ -87,6 +87,22 @@
   .banner-note{display:flex;align-items:flex-start;gap:6px;margin-top:10px;font-size:11px;line-height:1.4;color:var(--text-muted);}
   .banner-note svg{flex-shrink:0;margin-top:1px;color:var(--amber);}
 
+  .converter-card{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:16px;}
+  .converter-title{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;}
+  .converter-row{display:flex;gap:8px;align-items:center;}
+  .converter-input{flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;color:var(--text-primary);font-size:15px;font-family:'Space Grotesk',sans-serif;outline:none;}
+  .converter-output{flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;color:var(--text-primary);font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Space Grotesk',sans-serif;}
+  .converter-chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface-3);border-radius:999px;padding:6px 10px 6px 6px;font-size:13px;color:var(--text-secondary);cursor:pointer;user-select:none;flex-shrink:0;}
+  .converter-chip:active{background:var(--surface-2);}
+  .converter-chip b{color:var(--text-primary);font-weight:600;}
+  .converter-chip .swatch{width:18px;height:18px;border-radius:50%;overflow:hidden;background:var(--amber);flex-shrink:0;}
+  .converter-chip .swatch img{width:100%;height:100%;object-fit:cover;}
+  .converter-swap-wrap{display:flex;justify-content:center;margin:6px 0;}
+  .converter-swap-btn{width:30px;height:30px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-secondary);cursor:pointer;}
+  .converter-swap-btn:active{background:var(--surface-3);}
+  .converter-usd{font-size:11px;color:var(--text-muted);margin-top:8px;text-align:right;}
+  .converter-note{font-size:10.5px;color:var(--text-muted);margin-top:10px;line-height:1.4;text-align:center;}
+
   .progress-wrap{margin-bottom:14px;}
   .progress-row{display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-bottom:6px;}
   .progress-track{height:4px;border-radius:2px;background:var(--surface-2);overflow:hidden;}
@@ -250,6 +266,9 @@
         <svg class="theme-icon-dark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>
         <svg class="theme-icon-light" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
       </div>
+      <div class="icon-btn" id="converterBtn" role="button" aria-label="Toggle converter" onclick="toggleConverter()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v10M7 20l-3-3M7 20l3-3M17 14V4M17 4l3 3M17 4l-3 3"/></svg>
+      </div>
     </div>
   </div>
 
@@ -270,6 +289,33 @@
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
       <span>SDA/USD is a manual price — it'll switch to live once Sidra DEX has a stablecoin pool. Token rates below are already live on-chain.</span>
     </div>
+  </div>
+
+  <div class="converter-card" id="converterCard" style="display:none;">
+    <div class="converter-title">Convert</div>
+    <div class="converter-row">
+      <input type="number" id="convAmountA" class="converter-input" value="1" min="0" step="any" oninput="updateConverterOutput()">
+      <div class="converter-chip" id="convChipA" role="button" onclick="openConverterPicker('A')">
+        <span class="swatch"><img id="convChipIconA" src="img/sda.png" alt="" onerror="this.style.display='none'"></span>
+        <b id="convChipSymbolA">SDA</b>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+    </div>
+    <div class="converter-swap-wrap">
+      <div class="converter-swap-btn" role="button" aria-label="Swap direction" onclick="swapConverterDirection()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v10M7 20l-3-3M7 20l3-3M17 14V4M17 4l3 3M17 4l-3 3"/></svg>
+      </div>
+    </div>
+    <div class="converter-row">
+      <div class="converter-output num" id="convAmountB">…</div>
+      <div class="converter-chip" id="convChipB" role="button" onclick="openConverterPicker('B')">
+        <span class="swatch"><img id="convChipIconB" src="img/default.png" alt="" onerror="this.style.display='none'"></span>
+        <b id="convChipSymbolB">—</b>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+    </div>
+    <div class="converter-usd" id="convUsdEquiv"></div>
+    <div class="converter-note">This is a price calculator only — it doesn't execute an actual swap. To trade, use Sidra DEX directly.</div>
   </div>
 
   <div class="progress-wrap" id="progressWrap" style="display:none;">
@@ -344,6 +390,23 @@
       </div>
     </div>
     <div style="padding:2px 18px 20px;overflow-y:auto;flex:1;" id="detailBody"></div>
+  </div>
+</div>
+
+<!-- ===== CONVERTER TOKEN PICKER ===== -->
+<div class="picker-overlay" id="converterPickerOverlay" onclick="if(event.target===this) closeConverterPicker()">
+  <div class="picker-sheet">
+    <div class="picker-head">
+      <div class="picker-title">Select Token</div>
+      <div class="picker-close" onclick="closeConverterPicker()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </div>
+    </div>
+    <div class="search picker-search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" id="converterPickerSearch" placeholder="Search token..." oninput="renderConverterPicker()">
+    </div>
+    <div class="picker-list" id="converterPickerList"></div>
   </div>
 </div>
 
@@ -591,6 +654,7 @@ const AGG_PRICE = (() => {
       setStatus("Live · Sidra Chain", true);
     }
     renderList();
+    refreshConverterIfOpen();
 
     // Kalau user sedang di mode sort Liquidity waktu scan/rescan ini
     // terjadi, data liquiditas row baru butuh di-fetch ulang (row objects
@@ -1070,6 +1134,7 @@ function startHistoryAutoRefresh(){
     updateBaseBanner(baseUsdPriceNow, get24hChange(getHistoryFor(state.base.symbol), baseNativeRatio));
 
     renderList();
+    refreshConverterIfOpen();
 
     if (_detailToken) {
       const fresh = state.rows.find(r => r.symbol === _detailToken.symbol);
@@ -1610,6 +1675,179 @@ function toggleTheme(){
   if (typeof gtag === "function") {
     gtag('event', 'theme_toggle', { theme: next });
   }
+}
+
+// =====================================
+// CONVERTER — pakai usdPrice yang sudah ada dari hasil scan,
+// tidak ada RPC/fetch tambahan sama sekali. WSDA disembunyikan
+// dari daftar pilihan (sama seperti base picker).
+// =====================================
+function _converterTokenList(){
+  const list = [];
+  if (state.base.symbol && window._baseUsdPriceCache) {
+    list.push({ symbol: state.base.symbol, usdPrice: window._baseUsdPriceCache, icon: state.base.icon || "default.png" });
+  }
+  state.rows.forEach(r => {
+    if (!r.failed && r.usdPrice !== null && r.usdPrice !== undefined && r.symbol !== "WSDA") {
+      list.push({ symbol: r.symbol, usdPrice: r.usdPrice, icon: r.icon || "default.png" });
+    }
+  });
+  const seen = new Set();
+  return list.filter(t => {
+    if (seen.has(t.symbol)) return false;
+    seen.add(t.symbol);
+    return true;
+  });
+}
+
+let _converterOpen = false;
+let _converterInitialized = false;
+let _convStateA = "SDA";
+let _convStateB = null;
+let _converterPickerTarget = null;
+
+function _setConverterChip(target, token){
+  const symEl = document.getElementById(target === 'A' ? "convChipSymbolA" : "convChipSymbolB");
+  const iconEl = document.getElementById(target === 'A' ? "convChipIconA" : "convChipIconB");
+  if (symEl) symEl.textContent = token.symbol;
+  if (iconEl) { iconEl.src = "img/" + token.icon; iconEl.style.display = ""; }
+}
+
+function initConverterDefaults(){
+  const tokens = _converterTokenList();
+  if (!tokens.length) return;
+
+  // Default A = SDA (base pair saat ini), kecuali sudah pernah dipilih user
+  // dan simbolnya masih ada di daftar.
+  if (!_converterInitialized || !tokens.some(t => t.symbol === _convStateA)) {
+    _convStateA = tokens.some(t => t.symbol === "SDA") ? "SDA" : tokens[0].symbol;
+  }
+  if (!_converterInitialized || !tokens.some(t => t.symbol === _convStateB)) {
+    _convStateB = (tokens.find(t => t.symbol !== _convStateA) || tokens[0]).symbol;
+  }
+  _converterInitialized = true;
+
+  const tokenA = tokens.find(t => t.symbol === _convStateA);
+  const tokenB = tokens.find(t => t.symbol === _convStateB);
+  if (tokenA) _setConverterChip('A', tokenA);
+  if (tokenB) _setConverterChip('B', tokenB);
+}
+
+function toggleConverter(){
+  _converterOpen = !_converterOpen;
+  const card = document.getElementById("converterCard");
+  if (card) card.style.display = _converterOpen ? "block" : "none";
+
+  if (typeof gtag === "function") {
+    gtag('event', 'converter_toggle', { open: _converterOpen });
+  }
+
+  if (_converterOpen) {
+    initConverterDefaults();
+    updateConverterOutput();
+  }
+}
+
+function openConverterPicker(target){
+  _converterPickerTarget = target;
+  document.getElementById("converterPickerSearch").value = "";
+  renderConverterPicker();
+  document.getElementById("converterPickerOverlay").classList.add("open");
+}
+
+function closeConverterPicker(){
+  document.getElementById("converterPickerOverlay").classList.remove("open");
+  _converterPickerTarget = null;
+}
+
+function renderConverterPicker(){
+  const q = document.getElementById("converterPickerSearch").value.trim().toLowerCase();
+  const listEl = document.getElementById("converterPickerList");
+  let items = _converterTokenList();
+
+  if (q) items = items.filter(t => t.symbol.toLowerCase().includes(q));
+
+  listEl.innerHTML = "";
+
+  if (!items.length){
+    listEl.innerHTML = `<div class="empty">No tokens found.</div>`;
+    return;
+  }
+
+  const currentVal = _converterPickerTarget === 'A' ? _convStateA : _convStateB;
+
+  items.forEach(t => {
+    const isSelected = t.symbol === currentVal;
+    const el = document.createElement("div");
+    el.className = "picker-item" + (isSelected ? " selected" : "");
+    el.onclick = () => selectConverterToken(t);
+    el.innerHTML = `
+      <img src="img/${t.icon}" alt=""
+           onerror="this.onerror=null; if(this.src.indexOf('default.png')===-1){this.src='img/default.png';}">
+      <div class="picker-item-meta">
+        <div class="picker-item-symbol">${t.symbol}</div>
+      </div>
+      ${isSelected ? `<svg class="picker-item-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>` : ""}
+    `;
+    listEl.appendChild(el);
+  });
+}
+
+function selectConverterToken(t){
+  if (_converterPickerTarget === 'A') {
+    _convStateA = t.symbol;
+    _setConverterChip('A', t);
+  } else if (_converterPickerTarget === 'B') {
+    _convStateB = t.symbol;
+    _setConverterChip('B', t);
+  }
+  closeConverterPicker();
+  updateConverterOutput();
+}
+
+function updateConverterOutput(){
+  const amtEl = document.getElementById("convAmountA");
+  const outEl = document.getElementById("convAmountB");
+  const usdEl = document.getElementById("convUsdEquiv");
+  if (!amtEl || !outEl) return;
+
+  const tokens = _converterTokenList();
+  const priceA = tokens.find(t => t.symbol === _convStateA)?.usdPrice;
+  const priceB = tokens.find(t => t.symbol === _convStateB)?.usdPrice;
+  const amount = parseFloat(amtEl.value) || 0;
+
+  if (!priceA || !priceB) {
+    outEl.textContent = "…";
+    if (usdEl) usdEl.textContent = "Waiting for price data";
+    return;
+  }
+
+  const result = amount * (priceA / priceB);
+  outEl.textContent = fmtLiqNum(result);
+  if (usdEl) usdEl.textContent = "≈ " + fmtUsd(amount * priceA);
+}
+
+function swapConverterDirection(){
+  const tmp = _convStateA;
+  _convStateA = _convStateB;
+  _convStateB = tmp;
+
+  const tokens = _converterTokenList();
+  const tokenA = tokens.find(t => t.symbol === _convStateA);
+  const tokenB = tokens.find(t => t.symbol === _convStateB);
+  if (tokenA) _setConverterChip('A', tokenA);
+  if (tokenB) _setConverterChip('B', tokenB);
+
+  if (typeof gtag === "function") {
+    gtag('event', 'converter_swap_direction');
+  }
+
+  updateConverterOutput();
+}
+
+function refreshConverterIfOpen(){
+  if (!_converterOpen) return;
+  updateConverterOutput();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
