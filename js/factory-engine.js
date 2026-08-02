@@ -11,6 +11,42 @@ const FEES = [500, 3000, 10000];
 function _WSDA()    { return window.CONFIG?.WSDA; }
 function _FACTORY() { return window.CONFIG?.FACTORY; }
 
+// =====================================
+// SWAP EVENT (untuk volume 24h)
+// =====================================
+const SWAP_EVENT_ABI = [
+    "event Swap(address indexed sender,address indexed recipient,int256 amount0,int256 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick)"
+];
+const _swapIface  = new ethers.utils.Interface(SWAP_EVENT_ABI);
+const SWAP_TOPIC0 = _swapIface.getEventTopic("Swap");
+
+const _volumeCache = new Map();   // "tIn_tOut" → { data, ts }
+const VOLUME_TTL   = 5 * 60_000;  // 5 menit — samakan dengan siklus refresh histori
+
+let _avgBlockTimeCache = null;    // { value, ts }
+const BLOCK_TIME_TTL = 10 * 60_000;
+
+async function _estimateBlockTime() {
+    const now = Date.now();
+    if (_avgBlockTimeCache && now - _avgBlockTimeCache.ts < BLOCK_TIME_TTL) {
+        return _avgBlockTimeCache.value;
+    }
+    try {
+        const latest = await provider.getBlock("latest");
+        const sampleBack = 5000;
+        const olderNum = Math.max(0, latest.number - sampleBack);
+        const older = await provider.getBlock(olderNum);
+        const span = latest.number - older.number;
+        const blockTime = span > 0 ? (latest.timestamp - older.timestamp) / span : 3;
+        const value = blockTime > 0 ? blockTime : 3;
+        _avgBlockTimeCache = { value, ts: now };
+        return value;
+    } catch (e) {
+        console.warn("[FACTORY] gagal estimasi block time, pakai fallback 3s:", e.message || e);
+        return 3;
+    }
+}
+
 const FACTORY_ABI = [
     "function getPool(address,address,uint24) view returns (address)"
 ];
@@ -451,6 +487,99 @@ async function getPoolLiquidity(tokenIn, tokenOut) {
 }
 
 // =====================================
+// GET POOL VOLUME 24H — via eth_getLogs (Swap events)
+// =====================================
+async function getPoolVolume24h(tokenIn, tokenOut) {
+    const key    = `vol_${String(tokenIn).toLowerCase()}_${String(tokenOut).toLowerCase()}`;
+    const cached = _volumeCache.get(key);
+    if (cached && Date.now() - cached.ts < VOLUME_TTL) return cached.data;
+
+    try {
+        const A    = normalize(tokenIn);
+        const B    = normalize(tokenOut);
+        const best = await getBestPool(A, B); // sudah cache pool address + data
+        if (!best) return null;
+
+        const blockTime    = await _estimateBlockTime();
+        const latestBlock  = await provider.getBlockNumber();
+        const blocksIn24h  = Math.round(86400 / blockTime);
+        const fromBlock    = Math.max(0, latestBlock - blocksIn24h);
+
+        const CHUNK = 2000; // sesuaikan jika node RPC kamu batasnya lebih kecil
+        const chunkRanges = [];
+        for (let start = fromBlock; start <= latestBlock; start += CHUNK) {
+            chunkRanges.push({ start, end: Math.min(start + CHUNK - 1, latestBlock) });
+        }
+
+        let logs = [];
+        try {
+            const requests = chunkRanges.map(({ start, end }) => ({
+                method: "eth_getLogs",
+                params: [{
+                    address:   best.poolAddr,
+                    topics:    [SWAP_TOPIC0],
+                    fromBlock: ethers.utils.hexValue(start),
+                    toBlock:   ethers.utils.hexValue(end)
+                }]
+            }));
+
+            const results = await window.rpcBatch(requests);
+
+            results.forEach((r, i) => {
+                if (!r || r.error || !Array.isArray(r.result)) {
+                    console.warn(`[FACTORY] getLogs chunk gagal (${chunkRanges[i].start}-${chunkRanges[i].end}):`, r?.error);
+                    return;
+                }
+                logs = logs.concat(r.result);
+            });
+        } catch (e) {
+            console.warn("[FACTORY] batch getLogs gagal total:", e.message || e);
+        }
+
+        // sell{N} = token N mengalir MASUK ke pool (trader setor/jual token itu)
+        // buy{N}  = token N mengalir KELUAR dari pool (trader terima/beli token itu)
+        // (konvensi standar event Swap: amount positif = pool balance bertambah)
+        let sell0 = ethers.BigNumber.from(0), buy0 = ethers.BigNumber.from(0);
+        let sell1 = ethers.BigNumber.from(0), buy1 = ethers.BigNumber.from(0);
+        let txCount = 0;
+
+        logs.forEach(log => {
+            try {
+                const parsed = _swapIface.parseLog(log);
+                const a0 = parsed.args.amount0;
+                const a1 = parsed.args.amount1;
+                if (a0.gt(0)) sell0 = sell0.add(a0); else buy0 = buy0.add(a0.abs());
+                if (a1.gt(0)) sell1 = sell1.add(a1); else buy1 = buy1.add(a1.abs());
+                txCount++;
+            } catch (e) { /* log tidak sesuai ABI, skip */ }
+        });
+
+        const result = {
+            poolAddr: best.poolAddr,
+            token0:   best.token0,
+            token1:   best.token1,
+            volume0:  sell0.add(buy0).toString(),  // total (raw, belum dibagi decimals)
+            volume1:  sell1.add(buy1).toString(),
+            buy0:     buy0.toString(),
+            sell0:    sell0.toString(),
+            buy1:     buy1.toString(),
+            sell1:    sell1.toString(),
+            txCount,
+            fromBlock,
+            toBlock:  latestBlock,
+            fee:      best.fee
+        };
+
+        _volumeCache.set(key, { data: result, ts: Date.now() });
+        return result;
+
+    } catch (e) {
+        console.warn("[FACTORY] getPoolVolume24h error:", e);
+        return null;
+    }
+}
+
+// =====================================
 // CACHE STATS (debug)
 // =====================================
 function _cacheStats() {
@@ -470,6 +599,7 @@ window.PRICE_ENGINE = {
     getAmountOut,
     getAmountOutCurve,   // tambah ini
     getPoolLiquidity,
+    getPoolVolume24h,    // volume 24h
     getBestPool,
     _cacheStats,
     _clearCache: () => {
