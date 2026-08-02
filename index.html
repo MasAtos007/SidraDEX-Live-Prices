@@ -20,8 +20,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
 <!-- ===== APP ICON / PWA ===== -->
-<link rel="icon" type="image/png" href="img/sda.png">
-<link rel="apple-touch-icon" href="img/sda-192.png">
+<link rel="icon" type="image/png" href="img/app-logo.png">
+<link rel="apple-touch-icon" href="img/applogo-192.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0a0a0c">
 <meta name="mobile-web-app-capable" content="yes">
@@ -43,6 +43,13 @@
     --amber:#f5a623; --green:#3ecf8e; --red:#e5645f;
     --radius-lg:18px; --radius-md:12px;
   }
+  body[data-theme="light"]{
+    --bg:#f7f6f3; --surface-1:#ffffff; --surface-2:#f0efe9; --surface-3:#e6e4dc;
+    --border:#dedcd2; --text-primary:#1a1a17; --text-secondary:#6b6a63; --text-muted:#9a988e;
+    --amber:#d9860a; --green:#1f9e6e; --red:#c9433d;
+  }
+  body[data-theme="light"] .icon-btn{border-color:#c8c6ba;}
+  body[data-theme="light"] .icon-btn:active{background:var(--surface-3);}
   *{box-sizing:border-box;margin:0;padding:0;}
   html,body{height:100%;}
   body{background:var(--bg);color:var(--text-primary);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;display:flex;justify-content:center;}
@@ -61,6 +68,10 @@
   .icon-btn{width:34px;height:34px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-secondary);cursor:pointer;}
   .icon-btn.spin svg{animation:spin .8s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
+  .theme-icon-dark{display:block;}
+  .theme-icon-light{display:none;}
+  body[data-theme="light"] .theme-icon-dark{display:none;}
+  body[data-theme="light"] .theme-icon-light{display:block;}
 
   .banner{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;}
   .banner-label{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
@@ -234,6 +245,10 @@
       </div>
       <div class="icon-btn" id="refreshBtn" role="button" aria-label="Rescan" onclick="AGG_PRICE.rescan()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+      </div>
+      <div class="icon-btn" id="themeBtn" role="button" aria-label="Toggle theme" onclick="toggleTheme()">
+        <svg class="theme-icon-dark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>
+        <svg class="theme-icon-light" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
       </div>
     </div>
   </div>
@@ -1582,7 +1597,25 @@ function selectBase(t){
   AGG_PRICE.restart();
 }
 
+function applyTheme(theme){
+  document.body.setAttribute("data-theme", theme);
+  localStorage.setItem("sidraTheme", theme);
+}
+
+function toggleTheme(){
+  const current = document.body.getAttribute("data-theme") === "light" ? "light" : "dark";
+  const next = current === "light" ? "dark" : "light";
+  applyTheme(next);
+
+  if (typeof gtag === "function") {
+    gtag('event', 'theme_toggle', { theme: next });
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  const saved = localStorage.getItem("sidraTheme");
+  if (saved === "light") applyTheme("light");
+
   AGG_PRICE.scanAll();
   startHistoryAutoRefresh();
 });
