@@ -1324,11 +1324,46 @@ function buildSparkline(history){
 
   const fmtP = (n) => n < 0.01 ? n.toExponential(2) : n.toLocaleString("en-US", { maximumFractionDigits: n < 1 ? 6 : 4 });
 
-  const AXIS_COUNT = Math.min(7, pts.length);
-  const axisIdx = [];
-  for (let i = 0; i < AXIS_COUNT; i++) {
-    const idx = Math.round((i / (AXIS_COUNT - 1)) * (pts.length - 1));
-    if (!axisIdx.includes(idx)) axisIdx.push(idx);
+  // Satu tick per HARI KALENDER yang unik di rentang data — bukan rata
+  // berdasarkan posisi index atau jarak waktu murni. Itu penting karena
+  // kalau rentang datanya cuma, misalnya, 96 jam mulai tengah hari Jumat,
+  // pembagian rata-waktu bisa jatuh dua kali di hari yang sama (Fri, Fri)
+  // dan melompati hari lain. Dengan dikelompokkan per tanggal kalender,
+  // tiap label pasti mewakili hari yang berbeda, sesuai urutan asli.
+  const dayKey = (ts) => new Date(ts).toDateString();
+  const dayRepIdx = new Map(); // dayKey -> index titik paling dekat ke tengah hari (jam 12:00) itu
+  pts.forEach((p, idx) => {
+    const key = dayKey(p.t);
+    if (!dayRepIdx.has(key)) {
+      dayRepIdx.set(key, idx);
+    } else {
+      const d = new Date(p.t);
+      const noon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0).getTime();
+      const curIdx = dayRepIdx.get(key);
+      if (Math.abs(p.t - noon) < Math.abs(pts[curIdx].t - noon)) dayRepIdx.set(key, idx);
+    }
+  });
+
+  let axisIdx = Array.from(dayRepIdx.values()).sort((a, b) => a - b);
+
+  // Kalau ternyata ada lebih dari 7 hari unik (histori lebih panjang dari
+  // seminggu), downsample DAFTAR HARI itu sendiri secara merata — bukan
+  // titik data mentahnya — supaya tetap maksimal 7 label di sumbu.
+  const MAX_AXIS = 7;
+  if (axisIdx.length > MAX_AXIS) {
+    const picked = [];
+    for (let i = 0; i < MAX_AXIS; i++) {
+      const pos = Math.round((i / (MAX_AXIS - 1)) * (axisIdx.length - 1));
+      const idx = axisIdx[pos];
+      if (!picked.includes(idx)) picked.push(idx);
+    }
+    axisIdx = picked;
+  }
+
+  // Tick paling kanan selalu titik data PALING BARU (bukan sekadar wakil
+  // hari terakhir) — supaya label paling kanan selalu akurat "now"/"Xh ago".
+  if (axisIdx.length && axisIdx[axisIdx.length - 1] !== pts.length - 1) {
+    axisIdx[axisIdx.length - 1] = pts.length - 1;
   }
 
   const fmtAxisLabel = (ts) => {
