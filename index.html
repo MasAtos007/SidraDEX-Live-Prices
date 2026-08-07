@@ -218,6 +218,7 @@
   .liq-box .liq-val{font-size:13.5px;font-weight:600;}
   .liq-box .liq-lbl{font-size:10.5px;color:var(--text-secondary);margin-top:3px;}
   .detail-loading{font-size:12px;color:var(--text-muted);text-align:center;padding:16px 4px;}
+  .range-select{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-size:11px;font-weight:600;padding:4px 8px;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;}
   .chart-wrap{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:8px 6px;}
   .chart-wrap svg{width:100%;height:70px;display:block;}
   .chart-axis{position:relative;height:32px;margin-top:4px;padding:0 2px;}
@@ -1109,6 +1110,7 @@ function openToken(symbol){
 let _detailToken = null;
 let _liqRequestId = 0;
 let _volRequestId = 0;
+let _detailRangeMs = 7 * DAY_MS;
 
 const HISTORY_REFRESH_MS = 5 * 60 * 1000;
 let _lastHistoryRefreshAt = Date.now();
@@ -1187,10 +1189,28 @@ function _decimalsForAddr(addr){
 
 let _tokenDetailHistoryPushed = false;
 
+function onDetailRangeChange(val){
+  _detailRangeMs = Number(val);
+
+  if (typeof gtag === "function") {
+    gtag('event', 'change_chart_range', { range_ms: _detailRangeMs });
+  }
+
+  if (!_detailToken) return;
+
+  const rangedHistory = filterHistoryByRange(getHistoryFor(_detailToken.symbol), _detailRangeMs);
+  const chart = buildSparkline(rangedHistory);
+  const chartWrap = document.getElementById("chartWrap");
+  const axisWrap = document.getElementById("chartAxis");
+  if (chartWrap) chartWrap.innerHTML = chart ? chart.svg : '<div class="detail-loading">Not enough history in this range.</div>';
+  if (axisWrap) axisWrap.innerHTML = chart ? chart.axisHtml : "";
+}
+
 function openTokenDetail(symbol){
   const row = state.rows.find(r => r.symbol === symbol);
   if (!row) return;
   _detailToken = row;
+  _detailRangeMs = 7 * DAY_MS;
   renderTokenDetail(row);
   updateRefreshIndicatorText();
 
@@ -1349,7 +1369,7 @@ function buildSparkline(history){
   // Kalau ternyata ada lebih dari 7 hari unik (histori lebih panjang dari
   // seminggu), downsample DAFTAR HARI itu sendiri secara merata — bukan
   // titik data mentahnya — supaya tetap maksimal 7 label di sumbu.
-  const MAX_AXIS = 7;
+  const MAX_AXIS = 8;
   if (axisIdx.length > MAX_AXIS) {
     const picked = [];
     for (let i = 0; i < MAX_AXIS; i++) {
@@ -1423,6 +1443,13 @@ function buildSparkline(history){
   return { svg, axisHtml };
 }
 
+function filterHistoryByRange(history, rangeMs){
+  if (!history || !history.length) return history;
+  const cutoff = Date.now() - rangeMs;
+  const filtered = history.filter(h => h.t >= cutoff);
+  return filtered.length >= 2 ? filtered : history;
+}
+
 function historyRangeLabel(history){
   if (!history || history.length < 2) return "";
   const spanMs = history[history.length - 1].t - history[0].t;
@@ -1450,7 +1477,8 @@ function renderTokenDetail(row){
     ? `<div class="detail-address-row"><span>Native SDA — no contract address</span></div>`
     : `<div class="detail-address-row"><span>${addr}</span><button class="copy-btn" onclick="copyAddress('${addr}', 'token')">Copy</button></div>`;
 
-  const chart = buildSparkline(getHistoryFor(row.symbol));
+  const rangedHistory = filterHistoryByRange(getHistoryFor(row.symbol), _detailRangeMs);
+  const chart = buildSparkline(rangedHistory);
 
   document.getElementById("detailBody").innerHTML = `
     <div class="detail-price num">${row.pending ? "…" : row.failed ? "no route" : fmtRate(row.rate, state.base.symbol)}</div>
@@ -1462,10 +1490,17 @@ function renderTokenDetail(row){
     </div>
 
     <div class="detail-section">
-      <div class="detail-label">Price history${historyRangeLabel(getHistoryFor(row.symbol))}</div>
+      <div class="detail-label" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Price history</span>
+        <select class="range-select" id="rangeSelect" onchange="onDetailRangeChange(this.value)">
+          <option value="${DAY_MS}" ${_detailRangeMs === DAY_MS ? "selected" : ""}>24H</option>
+          <option value="${3 * DAY_MS}" ${_detailRangeMs === 3 * DAY_MS ? "selected" : ""}>3D</option>
+          <option value="${7 * DAY_MS}" ${_detailRangeMs === 7 * DAY_MS ? "selected" : ""}>7D</option>
+        </select>
+      </div>
       <div class="refresh-indicator" id="refreshIndicator"><span class="live-dot"></span><span id="refreshIndicatorText">Updated just now</span></div>
       <div class="chart-wrap" id="chartWrap">${chart ? chart.svg : '<div class="detail-loading">Not enough history yet — this fills in as the page keeps scanning.</div>'}</div>
-      ${chart ? `<div class="chart-axis">${chart.axisHtml}</div>` : ""}
+      <div class="chart-axis" id="chartAxis">${chart ? chart.axisHtml : ""}</div>
     </div>
 
     <div class="detail-section">
