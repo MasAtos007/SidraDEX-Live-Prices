@@ -218,7 +218,13 @@
   .liq-box .liq-val{font-size:13.5px;font-weight:600;}
   .liq-box .liq-lbl{font-size:10.5px;color:var(--text-secondary);margin-top:3px;}
   .detail-loading{font-size:12px;color:var(--text-muted);text-align:center;padding:16px 4px;}
-  .range-select{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-size:11px;font-weight:600;padding:4px 8px;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;}
+  .range-select{
+    background:var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238f8e8a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 6px center/12px 12px;
+    border:1px solid var(--border);border-radius:8px;color:var(--text-primary);
+    font-size:11px;font-weight:600;padding:4px 22px 4px 10px;outline:none;cursor:pointer;
+    -webkit-appearance:none;appearance:none;
+  }
+  .range-select:active{background-color:var(--surface-3);}
   .chart-wrap{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:8px 6px;}
   .chart-wrap svg{width:100%;height:70px;display:block;}
   .chart-axis{position:relative;height:32px;margin-top:4px;padding:0 2px;}
