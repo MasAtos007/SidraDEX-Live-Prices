@@ -73,7 +73,9 @@
   body[data-theme="light"] .theme-icon-dark{display:none;}
   body[data-theme="light"] .theme-icon-light{display:block;}
 
-  .banner{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;}
+  .banner{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;position:relative;}
+  .banner-help-btn{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-secondary);cursor:pointer;}
+  .banner-help-btn:active{background:var(--surface-3);}
   .banner-label{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
   .banner-row{display:flex;align-items:flex-end;justify-content:space-between;}
   .banner-price{font-size:30px;font-weight:600;letter-spacing:-.01em;}
@@ -248,6 +250,18 @@
     0%{border-color:var(--green);box-shadow:0 0 0 1px var(--green);}
     100%{border-color:var(--border);box-shadow:none;}
   }
+
+  /* ===== ONBOARDING COACH TOUR ===== */
+  .coach-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;display:none;}
+  .coach-overlay.open{display:block;}
+  .coach-ring{position:fixed;border-radius:14px;box-shadow:0 0 0 4px var(--amber),0 0 0 9999px rgba(0,0,0,.55);z-index:3001;pointer-events:none;transition:all .25s ease;}
+  .coach-bubble{position:fixed;width:260px;background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:14px 16px;z-index:3002;box-shadow:0 8px 24px rgba(0,0,0,.4);transition:all .25s ease;}
+  .coach-bubble-title{font-size:13px;font-weight:600;margin-bottom:4px;}
+  .coach-bubble-text{font-size:12px;color:var(--text-secondary);line-height:1.45;margin-bottom:12px;}
+  .coach-bubble-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .coach-skip{font-size:11.5px;color:var(--text-muted);cursor:pointer;user-select:none;}
+  .coach-progress{font-size:10.5px;color:var(--text-muted);}
+  .coach-next{font-size:12px;font-weight:600;background:var(--amber);color:#1a1103;border:none;border-radius:999px;padding:7px 16px;cursor:pointer;flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -283,6 +297,9 @@
   </div>
 
   <div class="banner">
+    <div class="banner-help-btn" id="helpBtn" role="button" aria-label="Show feature tour" onclick="startCoachTour()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4"/><path d="M12 17h.01"/></svg>
+    </div>
     <div class="banner-label" id="baseLabel">1 SDA</div>
     <div class="banner-row">
       <div>
@@ -421,6 +438,19 @@
 </div>
 
 <div class="copy-toast" id="copyToast">Address copied</div>
+
+<div class="coach-overlay" id="coachOverlay">
+  <div class="coach-ring" id="coachRing"></div>
+  <div class="coach-bubble" id="coachBubble">
+    <div class="coach-bubble-title" id="coachTitle"></div>
+    <div class="coach-bubble-text" id="coachText"></div>
+    <div class="coach-bubble-actions">
+      <span class="coach-skip" onclick="endCoachTour()">Skip</span>
+      <span class="coach-progress" id="coachProgress"></span>
+      <button class="coach-next" id="coachNextBtn" onclick="nextCoachStep()">Next</button>
+    </div>
+  </div>
+</div>
 
 <script>
 async function loadTokenList() {
@@ -1387,6 +1417,87 @@ function shareApp(){
   }
 }
 
+// =====================================
+// COACH TOUR — tur onboarding sekali jalan, nunjuk fitur-fitur yang
+// cuma berupa ikon tanpa teks (gampang kelewat, kayak toggle liquidity).
+// Muncul otomatis sekali di kunjungan pertama (localStorage), dan bisa
+// diputar ulang kapan saja lewat tombol "?" di topbar.
+// =====================================
+const COACH_STEPS = [
+  { sel: "#baseChipBtn", title: "Base pair", text: "Tap this to change which token all prices are shown against — e.g. price everything in AIR instead of SDA." },
+  { sel: "#refreshBtn", title: "Rescan prices", text: "Manually refresh all token prices right now." },
+  { sel: "#themeBtn", title: "Theme", text: "Switch between dark and light mode." },
+  { sel: "#converterBtn", title: "Converter", text: "Open a quick calculator to convert between any two tokens — no swap needed." },
+  { sel: "#liqModeBtn", title: "Sort by liquidity", text: "Tap here to sort the list by pool liquidity instead of price." },
+  { sel: "#sortToggle", title: "Sort direction", text: "Tap to flip between highest-first and lowest-first." }
+];
+
+let _coachIdx = 0;
+
+function startCoachTour(){
+  const overlay = document.getElementById("coachOverlay");
+  if (!overlay) return;
+  _coachIdx = 0;
+  overlay.classList.add("open");
+  showCoachStep();
+
+  if (typeof gtag === "function") gtag('event', 'coach_tour_start');
+}
+
+function showCoachStep(){
+  const step = COACH_STEPS[_coachIdx];
+  const el = step ? document.querySelector(step.sel) : null;
+
+  // Kalau elemen targetnya lagi gak ada di DOM (misal converter belum
+  // pernah dibuka jadi elemennya tersembunyi tapi tetap ada di DOM — aman),
+  // atau step-nya habis, skip ke step berikutnya / selesai.
+  if (!step || !el) { nextCoachStep(); return; }
+
+  const rect = el.getBoundingClientRect();
+  const pad = 6;
+  const ring = document.getElementById("coachRing");
+  ring.style.left = (rect.left - pad) + "px";
+  ring.style.top = (rect.top - pad) + "px";
+  ring.style.width = (rect.width + pad * 2) + "px";
+  ring.style.height = (rect.height + pad * 2) + "px";
+
+  document.getElementById("coachTitle").textContent = step.title;
+  document.getElementById("coachText").textContent = step.text;
+  document.getElementById("coachProgress").textContent = (_coachIdx + 1) + " / " + COACH_STEPS.length;
+  document.getElementById("coachNextBtn").textContent = _coachIdx === COACH_STEPS.length - 1 ? "Done" : "Next";
+
+  const bubble = document.getElementById("coachBubble");
+  const bubbleW = 260;
+  const approxBubbleH = 140;
+  let left = rect.left + rect.width / 2 - bubbleW / 2;
+  left = Math.max(12, Math.min(left, window.innerWidth - bubbleW - 12));
+  let top = rect.bottom + 14;
+  if (top + approxBubbleH > window.innerHeight) {
+    top = rect.top - approxBubbleH - 14;
+  }
+  bubble.style.left = left + "px";
+  bubble.style.top = Math.max(12, top) + "px";
+}
+
+function nextCoachStep(){
+  _coachIdx++;
+  if (_coachIdx >= COACH_STEPS.length) { endCoachTour(); return; }
+  showCoachStep();
+}
+
+function endCoachTour(){
+  const overlay = document.getElementById("coachOverlay");
+  if (overlay) overlay.classList.remove("open");
+  localStorage.setItem("sidraCoachSeen", "1");
+
+  if (typeof gtag === "function") gtag('event', 'coach_tour_end', { last_step: _coachIdx });
+}
+
+window.addEventListener("resize", () => {
+  const overlay = document.getElementById("coachOverlay");
+  if (overlay && overlay.classList.contains("open")) showCoachStep();
+});
+
 function downsampleHistory(history, maxPoints){
   if (history.length <= maxPoints) return history;
   const result = [];
@@ -1592,7 +1703,7 @@ function renderTokenDetail(row){
         <div class="scrub-tooltip" id="scrubTooltip"></div>
       </div>
       <div class="chart-axis" id="chartAxis">${chart ? chart.axisHtml : ""}</div>
-      <div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:6px;">Tekan &amp; geser di grafik untuk lihat harga tiap titik</div>
+      <div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:6px;">Press &amp; drag on the chart to see the price at each point</div>
     </div>
 
     <div class="detail-section">
@@ -2020,6 +2131,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   AGG_PRICE.scanAll();
   startHistoryAutoRefresh();
+
+  // Tur onboarding cuma muncul otomatis sekali (kunjungan pertama).
+  // Dikasih jeda 1.2 detik biar layout (ikon-ikon di topbar) sudah
+  // kebentuk penuh dulu sebelum coach-mark ngukur posisinya.
+  if (!localStorage.getItem("sidraCoachSeen")) {
+    setTimeout(startCoachTour, 1200);
+  }
 });
 </script>
 </body>
