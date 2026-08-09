@@ -48,8 +48,8 @@
     --border:#dedcd2; --text-primary:#1a1a17; --text-secondary:#6b6a63; --text-muted:#9a988e;
     --amber:#d9860a; --green:#1f9e6e; --red:#c9433d;
   }
-  body[data-theme="light"] .icon-btn{border-color:#c8c6ba;}
-  body[data-theme="light"] .icon-btn:active{background:var(--surface-3);}
+  body[data-theme="light"] .icon-btn{background:rgba(217,134,10,.08);border-color:rgba(217,134,10,.45);color:var(--amber);}
+  body[data-theme="light"] .icon-btn:active{background:rgba(217,134,10,.18);}
   *{box-sizing:border-box;margin:0;padding:0;}
   html,body{height:100%;}
   body{background:var(--bg);color:var(--text-primary);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;display:flex;justify-content:center;}
@@ -65,7 +65,8 @@
   .dot{width:5px;height:5px;border-radius:50%;background:var(--green);display:inline-block;}
   .dot.off{background:var(--red);}
   .dot.busy{background:var(--amber);}
-  .icon-btn{width:34px;height:34px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-secondary);cursor:pointer;}
+  .icon-btn{width:34px;height:34px;border-radius:50%;background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.45);display:flex;align-items:center;justify-content:center;color:var(--amber);cursor:pointer;}
+  .icon-btn:active{background:rgba(245,166,35,.18);}
   .icon-btn.spin svg{animation:spin .8s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
   .theme-icon-dark{display:block;}
@@ -73,7 +74,14 @@
   body[data-theme="light"] .theme-icon-dark{display:none;}
   body[data-theme="light"] .theme-icon-light{display:block;}
 
-  .banner{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;position:relative;}
+  .banner{
+    background-color: var(--surface-1);
+    background-image: url("img/banner-coin.png");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: cover;
+    border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;position:relative;
+  }
   .banner-help-btn{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-secondary);cursor:pointer;}
   .banner-help-btn:active{background:var(--surface-3);}
   .banner-label{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
