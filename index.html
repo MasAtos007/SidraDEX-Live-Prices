@@ -1585,14 +1585,108 @@ window.addEventListener("resize", () => {
   if (overlay && overlay.classList.contains("open")) showCoachStep();
 });
 
-function downsampleHistory(history, maxPoints){
+function downsampleHistory(history, maxPoints) {
   if (history.length <= maxPoints) return history;
-  const result = [];
-  for (let i = 0; i < maxPoints; i++){
-    const idx = Math.round((i / (maxPoints - 1)) * (history.length - 1));
-    result.push(history[idx]);
+
+  // 1) Kelompokkan index mentah per hari kalender.
+  const dayGroups = new Map(); // dayKey -> [index,...] (urut waktu, karena history sudah sorted)
+  history.forEach((h, idx) => {
+    const key = new Date(h.t).toDateString();
+    if (!dayGroups.has(key)) dayGroups.set(key, []);
+    dayGroups.get(key).push(idx);
+  });
+
+  const days = Array.from(dayGroups.keys());
+  const numDays = days.length;
+
+  // 2) Kalau jumlah hari unik justru LEBIH BANYAK dari maxPoints (histori
+  //    sangat panjang, misal 90D), turunkan dulu tiap hari jadi 1 titik
+  //    representatif (paling dekat jam 12:00), baru daftar hari itu sendiri
+  //    yang di-downsample index-based — bukan titik mentahnya.
+  if (numDays >= maxPoints) {
+    const dayReps = days.map(key => {
+      const idxs = dayGroups.get(key);
+      let best = idxs[0];
+      const d = new Date(history[best].t);
+      const noon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0).getTime();
+      let bestDiff = Math.abs(history[best].t - noon);
+      idxs.forEach(i => {
+        const diff = Math.abs(history[i].t - noon);
+        if (diff < bestDiff) { best = i; bestDiff = diff; }
+      });
+      return best;
+    }).sort((a, b) => a - b);
+
+    if (dayReps.length <= maxPoints) return dayReps.map(i => history[i]);
+
+    const picked = [];
+    for (let i = 0; i < maxPoints; i++) {
+      const pos = Math.round((i / (maxPoints - 1)) * (dayReps.length - 1));
+      const idx = dayReps[pos];
+      if (!picked.includes(idx)) picked.push(idx);
+    }
+    return picked.sort((a, b) => a - b).map(i => history[i]);
   }
-  return result;
+
+  // 3) Kasus normal: alokasikan kuota slot per hari secara proporsional ke
+  //    jumlah titik mentah hari itu, dengan jaminan minimal 1 slot/hari.
+  const totalRaw = history.length;
+  const quota = new Map();
+  let allocated = 0;
+  days.forEach(key => {
+    const raw = dayGroups.get(key).length;
+    const q = Math.max(1, Math.round((raw / totalRaw) * maxPoints));
+    quota.set(key, q);
+    allocated += q;
+  });
+
+  // Koreksi pembulatan supaya total kuota == maxPoints persis.
+  while (allocated > maxPoints) {
+    const biggest = days.reduce((a, b) => quota.get(a) > quota.get(b) ? a : b);
+    if (quota.get(biggest) <= 1) break; // jangan sampai ada hari dapat 0 slot
+    quota.set(biggest, quota.get(biggest) - 1);
+    allocated--;
+  }
+  while (allocated < maxPoints) {
+    const biggest = days.reduce((a, b) =>
+      dayGroups.get(a).length > dayGroups.get(b).length ? a : b);
+    quota.set(biggest, quota.get(biggest) + 1);
+    allocated++;
+  }
+
+  // 4) Dalam tiap hari, ambil titik sesuai kuota secara merata index-based,
+  //    TAPI selalu paksa masukkan index harga tertinggi & terendah hari itu
+  //    juga (kalau belum kebawa) — supaya spike singkat (misal cuma
+  //    beberapa menit) tidak pernah hilang gara-gara tidak "kena giliran"
+  //    sampel merata.
+  const resultIdx = [];
+  days.forEach(key => {
+    const idxs = dayGroups.get(key);
+    const q = Math.min(quota.get(key), idxs.length);
+    const picked = new Set();
+
+    if (idxs.length <= q) {
+      idxs.forEach(i => picked.add(i));
+    } else {
+      for (let i = 0; i < q; i++) {
+        const pos = Math.round((i / (q - 1 || 1)) * (idxs.length - 1));
+        picked.add(idxs[pos]);
+      }
+
+      // Cari index harga max & min di hari ini, paksa masuk kalau belum ada.
+      let maxIdx = idxs[0], minIdx = idxs[0];
+      idxs.forEach(i => {
+        if (history[i].p > history[maxIdx].p) maxIdx = i;
+        if (history[i].p < history[minIdx].p) minIdx = i;
+      });
+      picked.add(maxIdx);
+      picked.add(minIdx);
+    }
+
+    picked.forEach(i => resultIdx.push(i));
+  });
+
+  return Array.from(new Set(resultIdx)).sort((a, b) => a - b).map(i => history[i]);
 }
 
 function buildSparkline(history){
@@ -1648,7 +1742,7 @@ function buildSparkline(history){
   // Kalau ternyata ada lebih dari 7 hari unik (histori lebih panjang dari
   // seminggu), downsample DAFTAR HARI itu sendiri secara merata — bukan
   // titik data mentahnya — supaya tetap maksimal 7 label di sumbu.
-  const MAX_AXIS = 8;
+  const MAX_AXIS = 9;
   if (axisIdx.length > MAX_AXIS) {
     const picked = [];
     for (let i = 0; i < MAX_AXIS; i++) {
@@ -1667,8 +1761,9 @@ function buildSparkline(history){
 
   const fmtAxisLabel = (ts) => {
     const diff = Date.now() - ts;
+    const isToday = new Date(ts).toDateString() === new Date().toDateString();
     if (diff < 60000) return "now";
-    if (diff < DAY_MS) return fmtDuration(diff) + " ago";
+    if (isToday) return fmtDuration(diff) + " ago";
     return new Date(ts).toLocaleDateString("en-US", { weekday: "short" });
   };
 
@@ -1708,11 +1803,25 @@ function buildSparkline(history){
     ${ticks}
   </svg>`;
 
+  // Jarak minimum antar label (dalam %) sebelum dianggap "terlalu deket"
+  // dan perlu diturunkan ke baris kedua — dihitung dari lebar kira-kira
+  // 1 label pendek ("Thu", "5m ago", dst) relatif ke total lebar chart.
+  const MIN_LABEL_GAP_PCT = 16;
+
+  const axisXPcts = axisIdx.map(idx => (coords[idx].x / w) * 100);
+
   const axisHtml = axisIdx.map((idx, i) => {
     const c = coords[idx];
-    const xPct = (c.x / w) * 100;
+    const xPct = axisXPcts[i];
     const isLast = i === axisIdx.length - 1;
-    const stagger = i % 2 === 1 && !isLast;
+
+    // Selalu turunkan ke baris kedua kalau jaraknya ke label BERIKUTNYA
+    // (termasuk ke label terakhir/isLast) terlalu sempit — bukan cuma
+    // berdasar index genap/ganjil, supaya tabrakan seperti "Thu"+"5m ago"
+    // yang kebetulan sama-sama tidak di-stagger tidak lagi terjadi.
+    const nextGap = i < axisXPcts.length - 1 ? axisXPcts[i + 1] - xPct : Infinity;
+    const stagger = !isLast && nextGap < MIN_LABEL_GAP_PCT;
+
     const topStyle = stagger ? "top:14px;" : "top:0;";
     const colorStyle = isLast ? "color:var(--text-secondary);font-weight:500;" : "color:var(--text-muted);";
     const label = fmtAxisLabel(pts[idx].t);
@@ -1756,9 +1865,15 @@ function renderTokenDetail(row){
     : `<span class="flat">no price history yet</span>`;
 
   const addr = row.address;
+  const explorerBase = "https://ledger.sidrachain.com/address/";
   const addressRow = addr === "native"
     ? `<div class="detail-address-row"><span>Native SDA — no contract address</span></div>`
-    : `<div class="detail-address-row"><span>${addr}</span><button class="copy-btn" onclick="copyAddress('${addr}', 'token')">Copy</button></div>`;
+    : `<div class="detail-address-row"><span>${addr}</span>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="copy-btn" onclick="copyAddress('${addr}', 'token')">Copy</button>
+          <a class="copy-btn" href="${explorerBase}${addr}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;" onclick="if(typeof gtag==='function')gtag('event','view_on_explorer',{address_type:'token'});">↗</a>
+        </div>
+      </div>`;
 
   const rangedHistory = filterHistoryByRange(getHistoryFor(row.symbol), _detailRangeMs);
   const chart = buildSparkline(rangedHistory);
