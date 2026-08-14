@@ -176,6 +176,19 @@
   .list-head-right{display:flex;align-items:center;gap:8px;}
   .list-head-right span{cursor:pointer;user-select:none;}
   .liq-mode-btn{width:22px;height:22px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-muted);cursor:pointer;flex-shrink:0;padding:0;}
+  .fav-star{width:20px;height:20px;flex-shrink:0;background:none;border:none;padding:0;cursor:pointer;color:var(--text-muted);display:flex;align-items:center;justify-content:center;}
+  .fav-star svg{width:16px;height:16px;}
+  .fav-star.active{color:var(--amber);}
+  .fav-star:active{opacity:0.6;}
+
+  /* Badge bintang di list utama — nempel di pojok kiri-atas token icon,
+     posisinya "mengambang" (absolute) di atas elemen yang sudah ada,
+     jadi TIDAK menambah lebar/kolom baru ke row. Row tetap persis
+     selebar sebelum fitur favorit ditambahkan. */
+  .token-icon-wrap{position:relative;flex-shrink:0;}
+  .fav-star-badge{position:absolute;top:-4px;left:-4px;width:16px;height:16px;background:var(--surface-1);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-muted);cursor:pointer;padding:0;border:1px solid var(--border);}
+  .fav-star-badge svg{width:10px;height:10px;}
+  .fav-star-badge.active{color:var(--amber);border-color:var(--amber);}
   .liq-mode-btn.active{background:rgba(79,163,227,.18);border-color:#4fa3e3;color:#4fa3e3;}
   .liq-mode-btn svg{width:12px;height:12px;}
 
@@ -439,6 +452,7 @@
       <div class="tab active" data-filter="all" onclick="setFilter('all',this)">All</div>
       <div class="tab" data-filter="gainers" onclick="setFilter('gainers',this)">Gainers</div>
       <div class="tab" data-filter="losers" onclick="setFilter('losers',this)">Losers</div>
+      <div class="tab" data-filter="favorites" onclick="setFilter('favorites',this)">★</div>
     </div>
   </div>
   <div id="stickyHeaderSpacer" style="height:0;"></div>
@@ -499,8 +513,13 @@
           <div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" id="detailName"></div>
         </div>
       </div>
-      <div class="picker-close" onclick="closeTokenDetail()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+        <button class="fav-star" id="detailFavBtn" style="width:32px;height:32px;" onclick="if(_detailToken) toggleFavorite(_detailToken.address, event)" aria-label="Toggle favorite">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>
+        </button>
+        <div class="picker-close" onclick="closeTokenDetail()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </div>
       </div>
     </div>
     <div style="padding:2px 18px 20px;overflow-y:auto;flex:1;" id="detailBody"></div>
@@ -819,14 +838,49 @@ const AGG_PRICE = (() => {
   return { scanAll, stopScan, rescan, restart };
 })();
 
+function loadFavorites(){
+  try {
+    const raw = localStorage.getItem("sidraFavorites");
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch (e) { return new Set(); }
+}
+
 let state = {
   filter: "all",
   sortBy: "price",     // "price" | "liquidity"
   sortDir: "desc",
   rows: [],
   showNoRoute: false,
+  favorites: loadFavorites(),  // Set berisi address token (lowercase) yang di-favoritkan
   base: { address: "native", symbol: "SDA", name: "Sidra Digital Asset", icon: "sda.png" }
 };
+
+function saveFavorites(){
+  try { localStorage.setItem("sidraFavorites", JSON.stringify(Array.from(state.favorites))); } catch (e) {}
+}
+
+function isFavorite(addr){
+  return state.favorites.has((addr || "").toLowerCase());
+}
+
+// event di-pass biar tap bintang di dalam row tidak ikut memicu klik row
+// (yang biasanya buka modal detail token) — dihentikan lewat stopPropagation.
+function toggleFavorite(addr, event){
+  if (event) event.stopPropagation();
+  const key = (addr || "").toLowerCase();
+  if (state.favorites.has(key)) state.favorites.delete(key);
+  else state.favorites.add(key);
+  saveFavorites();
+
+  if (typeof gtag === "function") {
+    gtag('event', 'toggle_favorite', { favorited: state.favorites.has(key) });
+  }
+
+  renderList();
+  if (_detailToken && (_detailToken.address || "").toLowerCase() === key) {
+    updateDetailFavButton(_detailToken);
+  }
+}
 
 let _searchDebounceTimer = null;
 function onSearchInput(){
@@ -1061,6 +1115,7 @@ function renderList(){
   if (q) rows = rows.filter(t => t.symbol.toLowerCase().includes(q) || t.name.toLowerCase().includes(q));
   if (state.filter === "gainers") rows = rows.filter(t => t.change !== null && t.change.pct > 0);
   if (state.filter === "losers") rows = rows.filter(t => t.change !== null && t.change.pct < 0);
+  if (state.filter === "favorites") rows = rows.filter(t => isFavorite(t.address));
 
   const isLiqMode = state.sortBy === "liquidity";
 
@@ -1086,6 +1141,8 @@ function renderList(){
       empty.textContent = hasAnyHistory
         ? "No tokens matching this filter right now."
         : "No price history yet — this fills in within a few minutes as the page keeps scanning.";
+    } else if (state.filter === "favorites") {
+      empty.textContent = "No favorites yet — tap the star on any token to add it here.";
     } else if (noRouteCount > 0 && !state.showNoRoute) {
       empty.textContent = "All tokens currently have no route against this base pair.";
     } else {
@@ -1138,11 +1195,17 @@ function renderList(){
         </div>`;
     }
 
+    const favActive = isFavorite(t.address);
     row.innerHTML = `
       <div class="row-left">
         <div class="token-rank">${idx + 1}</div>
-        <img class="token-icon" src="img/${iconFile}" alt=""
-             onerror="this.onerror=null; if(this.src.indexOf('default.png')===-1){this.src='img/default.png';} else {this.replaceWith(Object.assign(document.createElement('div'),{className:'token-icon',textContent:'${t.symbol.slice(0,2).toUpperCase()}',style:'background:${colorFor(t.symbol)}'}));}">
+        <div class="token-icon-wrap">
+          <img class="token-icon" src="img/${iconFile}" alt=""
+               onerror="this.onerror=null; if(this.src.indexOf('default.png')===-1){this.src='img/default.png';} else {this.replaceWith(Object.assign(document.createElement('div'),{className:'token-icon',textContent:'${t.symbol.slice(0,2).toUpperCase()}',style:'background:${colorFor(t.symbol)}'}));}">
+          <button class="fav-star-badge${favActive ? " active" : ""}" onclick="toggleFavorite('${t.address}', event)" aria-label="Toggle favorite">
+            <svg viewBox="0 0 24 24" fill="${favActive ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>
+          </button>
+        </div>
         <div class="token-meta">
           <div class="token-symbol">${t.symbol}<span style="color:var(--text-muted); font-weight:400;"> / ${state.base.symbol}</span></div>
           <div class="token-name">${t.name}</div>
@@ -1699,10 +1762,20 @@ function buildSparkline(history){
 
   const w = 300, chH = 90, pad = 6, topPad = 18, botPad = 18;
   const plotH = chH - topPad - botPad;
-  const stepX = pts.length > 1 ? (w - pad * 2) / (pts.length - 1) : 0;
+  const plotW = w - pad * 2;
 
-  const coords = pts.map((h, i) => {
-    const x = pad + i * stepX;
+  // Posisi X sekarang proporsional ke JARAK WAKTU ASLI tiap titik, bukan
+  // sekadar urutan index — supaya titik yang jauh secara waktu (misal
+  // titik representasi Kamis vs titik "5m ago" hari ini, yang terpisah
+  // ~21 jam) juga kelihatan berjarak di layar, bukan nempel cuma karena
+  // kebetulan bertetangga di array hasil downsample.
+  const tMin = pts[0].t;
+  const tMax = pts[pts.length - 1].t;
+  const tRange = tMax - tMin;
+
+  const coords = pts.map((h) => {
+    const xFrac = tRange > 0 ? (h.t - tMin) / tRange : 0;
+    const x = pad + xFrac * plotW;
     const y = topPad + (1 - (h.p - min) / range) * plotH;
     return { x, y };
   });
@@ -1789,6 +1862,10 @@ function buildSparkline(history){
     </defs>
     <line x1="${pad}" y1="${chH - botPad}" x2="${w - pad}" y2="${chH - botPad}"
       style="stroke:var(--border);stroke-width:1;"/>
+    ${axisIdx.map(idx => {
+      const c = coords[idx];
+      return `<line x1="${c.x.toFixed(1)}" y1="${topPad}" x2="${c.x.toFixed(1)}" y2="${chH - botPad}" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="2,3" opacity="0.6"/>`;
+    }).join("")}
     <polygon points="${areaStr}" fill="url(#${fillId})" stroke="none"/>
     <polyline points="${lineStr}" fill="none"
       style="stroke:${stroke};stroke-width:2;stroke-linejoin:round;stroke-linecap:round;"/>
@@ -1851,10 +1928,20 @@ function historyRangeLabel(history){
   return days <= 1 ? " (1 day)" : ` (${days} days)`;
 }
 
+function updateDetailFavButton(row){
+  const btn = document.getElementById("detailFavBtn");
+  if (!btn || !row) return;
+  const active = isFavorite(row.address);
+  btn.classList.toggle("active", active);
+  const svg = btn.querySelector("svg");
+  if (svg) svg.setAttribute("fill", active ? "currentColor" : "none");
+}
+
 function renderTokenDetail(row){
   document.getElementById("detailIcon").src = "img/" + (row.icon || "default.png");
   document.getElementById("detailSymbol").textContent = row.symbol;
   document.getElementById("detailName").textContent = row.name || "";
+  updateDetailFavButton(row);
 
   const changeHtml = row.change
     ? (() => {
