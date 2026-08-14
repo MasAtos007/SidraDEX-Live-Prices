@@ -754,13 +754,17 @@ const AGG_PRICE = (() => {
           const tokenIsNativeLike = isNativeLike(t);
           const tokenEngineAddr = engineAddr(t);
 
+          // Pakai getAmountOutCurve (bukan getPrice) supaya angka rate di list
+          // konsisten dengan estimasi yang dilihat user di modal konfirmasi
+          // swap — keduanya sama-sama memperhitungkan price impact dari
+          // ukuran trade (di sini diasumsikan 1 unit), bukan cuma harga spot.
           const nativeRatioPromise = tokenIsNativeLike
             ? Promise.resolve(1)
-            : withTimeout(PRICE_ENGINE.getPrice(tokenEngineAddr, "native"), SCAN_TIMEOUT);
+            : withTimeout(PRICE_ENGINE.getAmountOutCurve(tokenEngineAddr, "native", 1), SCAN_TIMEOUT);
 
           const baseRatioPromise = isBaseNative
             ? (tokenIsNativeLike ? Promise.resolve(1) : nativeRatioPromise)
-            : withTimeout(PRICE_ENGINE.getPrice(tokenEngineAddr, baseEngineAddr), SCAN_TIMEOUT);
+            : withTimeout(PRICE_ENGINE.getAmountOutCurve(tokenEngineAddr, baseEngineAddr, 1), SCAN_TIMEOUT);
 
           const [nativeRatio, baseRatio] = await Promise.all([nativeRatioPromise, baseRatioPromise]);
 
@@ -1299,7 +1303,12 @@ function openToken(symbol){
 let _detailToken = null;
 let _liqRequestId = 0;
 let _volRequestId = 0;
-let _detailRangeMs = 7 * DAY_MS;
+// ROLLBACK SWITCH: ganti nilai ini ke `7 * DAY_MS` untuk kembali ke default
+// 7D begitu histori GS sudah normal lagi tanpa gap. Cuma satu tempat ini
+// yang perlu diubah — dipakai di semua tempat default range di-set.
+const DEFAULT_CHART_RANGE_MS = DAY_MS;
+
+let _detailRangeMs = DEFAULT_CHART_RANGE_MS;
 let _scrubPoints = null;
 
 const HISTORY_REFRESH_MS = 5 * 60 * 1000;
@@ -1471,7 +1480,7 @@ function openTokenDetail(symbol){
   const row = state.rows.find(r => r.symbol === symbol);
   if (!row) return;
   _detailToken = row;
-  _detailRangeMs = 7 * DAY_MS;
+  _detailRangeMs = DEFAULT_CHART_RANGE_MS;
   renderTokenDetail(row);
   updateRefreshIndicatorText();
 
