@@ -8,6 +8,14 @@
 
 const FEES = [500, 3000, 10000];
 
+// Kalau trade 1 unit (amount yang dipakai untuk quote rate/harga di seluruh
+// app) mewakili lebih dari porsi ini terhadap reserve pool, curve formula
+// (constant-product) akan menghasilkan price impact yang tidak representatif
+// — pool tipis membuat angka "rate" melenceng jauh dari harga pasar wajar
+// hanya karena kebetulan reserve-nya kecil, bukan karena harga sungguhan
+// berubah. Di kondisi ini, fallback ke harga spot (tanpa price impact).
+const THIN_POOL_IMPACT_THRESHOLD = 0.02; // 2%
+
 function _WSDA()    { return window.CONFIG?.WSDA; }
 function _FACTORY() { return window.CONFIG?.FACTORY; }
 
@@ -401,6 +409,22 @@ async function getAmountOutCurve(tokenIn, tokenOut, amountIn) {
     }
 }
 
+// Helper: harga spot murni (tanpa price impact) — dipakai sebagai fallback
+// saat trade size terlalu besar relatif ke reserve pool (pool tipis).
+function _spotPriceOf(pool, tokenIn) {
+    try {
+        const data = _poolDataCache.get(pool.poolAddr);
+        if (!data) return 0;
+
+        let price = sqrtToPrice(data.slot0.sqrtPriceX96);
+        if (price <= 0) return 0;
+        if (tokenIn.toLowerCase() === pool.token1.toLowerCase()) price = 1 / price;
+        return price * (1 - pool.fee / 1_000_000);
+    } catch (e) {
+        return 0;
+    }
+}
+
 // Helper: hitung output pakai constant product dari data pool yang sudah di-cache
 function _calcCurveOut(pool, tokenIn, amountIn) {
     try {
@@ -423,6 +447,14 @@ function _calcCurveOut(pool, tokenIn, amountIn) {
         const Rout = isInput0 ? reserve1 : reserve0;
 
         if (Rin <= 0 || Rout <= 0) return 0;
+
+        // Pool tipis relatif ke trade size — curve formula akan mendistorsi
+        // angka secara tidak representatif. Pakai spot price sebagai gantinya.
+        if (amountIn / Rin > THIN_POOL_IMPACT_THRESHOLD) {
+            const spot = _spotPriceOf(pool, tokenIn);
+            const out = spot > 0 ? amountIn * spot : 0;
+            return isFinite(out) && out > 0 ? out : 0;
+        }
 
         // Constant product dengan fee
         const feeMult = 1 - (pool.fee / 1_000_000);
@@ -457,6 +489,15 @@ function _calcCurveIn(pool, tokenIn, amountOut) {
         const Rout = isInput0 ? reserve1 : reserve0;
 
         if (Rin <= 0 || Rout <= 0 || amountOut >= Rout) return 0;
+
+        // Pool tipis relatif ke trade size — curve formula akan mendistorsi
+        // angka secara tidak representatif (bahkan bisa meledak kalau
+        // amountOut mendekati Rout). Pakai spot price sebagai gantinya.
+        if (amountOut / Rout > THIN_POOL_IMPACT_THRESHOLD) {
+            const spot = _spotPriceOf(pool, tokenIn); // tokenOut per 1 tokenIn
+            const amtIn = spot > 0 ? amountOut / spot : 0;
+            return isFinite(amtIn) && amtIn > 0 ? amtIn : 0;
+        }
 
         const feeMult = 1 - (pool.fee / 1_000_000);
         const amtIn = (Rin * amountOut) / ((Rout - amountOut) * feeMult);
