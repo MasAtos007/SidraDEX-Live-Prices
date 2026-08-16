@@ -435,6 +435,70 @@ function _calcCurveOut(pool, tokenIn, amountIn) {
     }
 }
 
+// Helper: hitung amountIn yang dibutuhkan agar MENERIMA amountOut persis
+// (kebalikan dari _calcCurveOut) — ini yang dipakai DEX asli untuk
+// menampilkan "harga beli" (cost to acquire), bukan "harga jual".
+function _calcCurveIn(pool, tokenIn, amountOut) {
+    try {
+        const data = _poolDataCache.get(pool.poolAddr);
+        if (!data) return 0;
+
+        const sqrtPrice = Number(data.slot0.sqrtPriceX96) / (2 ** 96);
+        if (!sqrtPrice || sqrtPrice <= 0) return 0;
+
+        const L = Number(data.liquidity?.toString() || "0");
+        if (!L) return 0;
+
+        const reserve0 = L / sqrtPrice;
+        const reserve1 = L * sqrtPrice;
+
+        const isInput0 = tokenIn.toLowerCase() === pool.token0.toLowerCase();
+        const Rin  = isInput0 ? reserve0 : reserve1;
+        const Rout = isInput0 ? reserve1 : reserve0;
+
+        if (Rin <= 0 || Rout <= 0 || amountOut >= Rout) return 0;
+
+        const feeMult = 1 - (pool.fee / 1_000_000);
+        const amtIn = (Rin * amountOut) / ((Rout - amountOut) * feeMult);
+
+        return isFinite(amtIn) && amtIn > 0 ? amtIn : 0;
+    } catch (e) {
+        return 0;
+    }
+}
+
+// =====================================
+// AMOUNT IN CURVE — "harga beli" (exact output), match dengan
+// tampilan DEX resmi: berapa SDA dibayar untuk MENERIMA 1 token.
+// =====================================
+async function getAmountInCurve(tokenIn, tokenOut, amountOut) {
+    const A = normalize(tokenIn);
+    const B = normalize(tokenOut);
+    const amount = Number(amountOut);
+
+    if (!amount || amount <= 0) return 0;
+
+    try {
+        const best = await getBestPool(A, B);
+        if (best) return _calcCurveIn(best, A, amount);
+
+        const wsda = _WSDA();
+        if (!wsda) return 0;
+
+        const leg2Pool = await getBestPool(wsda, B);
+        if (!leg2Pool) return 0;
+        const wsda_needed = _calcCurveIn(leg2Pool, wsda, amount);
+        if (!wsda_needed || wsda_needed <= 0) return 0;
+
+        const leg1Pool = await getBestPool(A, wsda);
+        if (!leg1Pool) return 0;
+        return _calcCurveIn(leg1Pool, A, wsda_needed);
+    } catch (e) {
+        console.warn("[getAmountInCurve]", e);
+        return 0;
+    }
+}
+
 // =====================================
 // GET POOL LIQUIDITY
 // =====================================
@@ -597,7 +661,8 @@ function _cacheStats() {
 window.PRICE_ENGINE = {
     getPrice,
     getAmountOut,
-    getAmountOutCurve,   // tambah ini
+    getAmountOutCurve,
+    getAmountInCurve,    // harga beli (exact output) — match DEX resmi
     getPoolLiquidity,
     getPoolVolume24h,    // volume 24h
     getBestPool,
