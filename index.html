@@ -762,9 +762,12 @@ const AGG_PRICE = (() => {
             ? Promise.resolve(1)
             : withTimeout(PRICE_ENGINE.getAmountOutCurve(tokenEngineAddr, "native", 1), SCAN_TIMEOUT);
 
-          const baseRatioPromise = isBaseNative
-            ? (tokenIsNativeLike ? Promise.resolve(1) : nativeRatioPromise)
-            : withTimeout(PRICE_ENGINE.getAmountOutCurve(tokenEngineAddr, baseEngineAddr, 1), SCAN_TIMEOUT);
+          // Selalu pakai getAmountInCurve (harga beli/exact-output) untuk kolom
+          // rate, baik base-nya SDA maupun token lain — supaya konsisten dengan
+          // DEX resmi di kedua kasus, bukan cuma saat base bukan SDA.
+          const baseRatioPromise = tokenIsNativeLike
+            ? Promise.resolve(1)
+            : withTimeout(PRICE_ENGINE.getAmountInCurve(baseEngineAddr, tokenEngineAddr, 1), SCAN_TIMEOUT);
 
           const [nativeRatio, baseRatio] = await Promise.all([nativeRatioPromise, baseRatioPromise]);
 
