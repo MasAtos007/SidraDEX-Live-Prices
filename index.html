@@ -745,7 +745,7 @@ const AGG_PRICE = (() => {
     // "fetched, but no pool found" (null).
     state.rows = list.map(t => ({
       address: t.address, symbol: t.symbol, name: t.name, icon: t.icon,
-      rate: null, usdPrice: null, change: null, pending: true,
+      rate: null, usdPrice: null, nativeRatio: null, change: null, pending: true,
       liqBase: undefined, liqToken: undefined
     }));
     renderList();
@@ -782,8 +782,18 @@ const AGG_PRICE = (() => {
           const [nativeRatio, baseRatio] = await Promise.all([nativeRatioPromise, baseRatioPromise]);
 
           if (nativeRatio > 0 && row) {
-            const usdPrice = nativeRatio * sdaPrice;
-            row.usdPrice = usdPrice;
+            // Token yang jadi acuan whitelist (mis. sUSDT) sengaja DIPATOK
+            // $1.00 di tampilan harganya SENDIRI — karena dialah acuan yang
+            // dipakai untuk hitung harga SDA (lihat STABLECOIN_WHITELIST di
+            // balance.js), jadi tidak masuk akal kalau harga dirinya sendiri
+            // ikut goyang akibat price-impact simulasi 1 unit trade di kurva.
+            // rate (vs base pair) TETAP dari data live pool — cuma nilai USD
+            // yang ditampilkan yang dipatok, supaya konversi/trading tetap akurat.
+            const isWhitelistedStable = typeof STABLECOIN_WHITELIST !== "undefined"
+              && STABLECOIN_WHITELIST.some(sc => sc.symbol === t.symbol);
+
+            row.usdPrice = isWhitelistedStable ? 1 : (nativeRatio * sdaPrice);
+            row.nativeRatio = nativeRatio; // simpan rasio mentah — dipakai lagi di auto-refresh, jangan reverse-derive dari usdPrice yang sudah dipatok
             row.change = get24hChange(getHistoryFor(t.symbol), nativeRatio);
             row.rate = baseRatio > 0 ? baseRatio : null;
             row.pending = false;
@@ -1351,7 +1361,13 @@ function startHistoryAutoRefresh(){
 
     state.rows.forEach(r => {
       if (r.usdPrice === null) return;
-      const nativeRatio = sdaPriceLive > 0 ? r.usdPrice / sdaPriceLive : 0;
+      // Pakai rasio mentah yang sudah tersimpan dari hasil scan (lebih akurat
+      // & konsisten dengan histori GS) — JANGAN reverse-derive dari usdPrice,
+      // karena untuk token whitelist stablecoin (mis. sUSDT) usdPrice sengaja
+      // dipatok $1 dan tidak lagi merepresentasikan rasio pool sebenarnya.
+      const nativeRatio = (r.nativeRatio !== null && r.nativeRatio !== undefined)
+        ? r.nativeRatio
+        : (sdaPriceLive > 0 ? r.usdPrice / sdaPriceLive : 0); // fallback untuk baris lama/manual yang belum punya nativeRatio
       r.change = get24hChange(getHistoryFor(r.symbol), nativeRatio);
     });
 
