@@ -8,11 +8,13 @@ const provider = window.provider;
 // ==========================
 // HARDCODE TOKEN PRICE (USD)
 // Key HARUS sama persis dengan "symbol" di data/tokens.json
-// Generated otomatis dari tokens.json â€” tinggal isi harga yang masih 0
+// Generated otomatis dari tokens.json Ã¢â‚¬â€ tinggal isi harga yang masih 0
 // ==========================
 const TOKEN_PRICE_USD = {
     "SDA": 15,
     "WSDA": 0,
+    "USDX": 1,
+    "sUSDT": 1,
     "FREEt": 0,
     "GLNs": 0,
     "SDS": 0,
@@ -103,16 +105,110 @@ const TOKEN_PRICE_USD = {
 
 // ==========================
 // HITUNG HARGA USD TOKEN
-// MODE 1 (otomatis, NONAKTIF dulu): pool stablecoin di DEX Sidra
-//        -> isi STABLECOIN_ADDRESS kalau pool SDA/Stablecoin sudah ada
-// MODE 2 (aktif sekarang): SDA manual dari TOKEN_PRICE_USD,
+// MODE 1 (aktif): pool stablecoin ter-WHITELIST di DEX Sidra, DENGAN
+//        syarat likuiditasnya lolos ambang minimum â€” bukan sekadar
+//        "ada pool", karena siapa saja bisa bikin pool token bernama
+//        mirip stablecoin tanpa jaminan pegged 1:1 ke USD.
+// MODE 2 (fallback): SDA manual dari TOKEN_PRICE_USD,
 //        token lain otomatis dari pool (PRICE_ENGINE) dikali harga SDA
-// Fallback: manual dari TOKEN_PRICE_USD kalau pool tidak ada
+// Fallback akhir: manual dari TOKEN_PRICE_USD kalau semua di atas gagal
 // ==========================
 
-// NONAKTIF: isi address stablecoin di sini kapan pool-nya sudah ada
-// contoh: const STABLECOIN_ADDRESS = "0xAbC...123";
-const STABLECOIN_ADDRESS = null;
+// WHITELIST STABLECOIN â€” HANYA token yang statusnya sudah kamu percaya
+// masuk ke sini. Ini keputusan MANUAL, bukan otomatis dari tokens.json,
+// supaya token abal-abal yang kebetulan namanya "USDX"/"USDT" tidak
+// otomatis ikut jadi acuan harga SDA cuma karena ada yang bikin pool-nya.
+//
+// Urutan array = prioritas: yang pertama lolos cek likuiditas (lihat
+// MIN_STABLECOIN_LIQUIDITY_USD di bawah) yang dipakai.
+const STABLECOIN_WHITELIST = [
+    { symbol: "sUSDT", address: "0xBcd27707F604F9f9be1a5f8c5C17Fee0F9630B38" }
+    // USDX sengaja BELUM dimasukkan â€” pool-nya cuma ~14.7 USDX (~$15),
+    // volume nyaris kosong (23 swap/24h), gampang dimanipulasi 1 wallet.
+    // Tambahkan lagi ke sini kalau likuiditasnya sudah lebih sehat, atau
+    // sudah ada konfirmasi resmi dari tim Sidra.
+];
+
+// Ambang minimum likuiditas (estimasi kedua sisi pool, dalam USD) supaya
+// sebuah pool stablecoin dipercaya jadi acuan harga. Di bawah ini,
+// dianggap terlalu tipis/rawan manipulasi â€” diskip, lanjut ke kandidat
+// berikutnya di whitelist (atau fallback manual kalau semua gagal).
+const MIN_STABLECOIN_LIQUIDITY_USD = 200;
+
+let _activeStablecoinCache = { addr: null, resolved: false, ts: 0 };
+const ACTIVE_STABLECOIN_CACHE_TTL = 45_000;
+
+// Cari kandidat pertama di STABLECOIN_WHITELIST yang: (a) pool-nya ada,
+// (b) likuiditasnya lolos MIN_STABLECOIN_LIQUIDITY_USD. Return null kalau
+// tidak ada satupun yang lolos â€” pemanggil WAJIB fallback ke harga manual.
+async function getActiveStablecoinAddress() {
+    if (_activeStablecoinCache.resolved && (Date.now() - _activeStablecoinCache.ts) < ACTIVE_STABLECOIN_CACHE_TTL) {
+        return _activeStablecoinCache.addr;
+    }
+
+    let resolved = null;
+
+    if (window.PRICE_ENGINE && typeof window.PRICE_ENGINE.getPoolLiquidity === "function") {
+        for (const sc of STABLECOIN_WHITELIST) {
+            try {
+                const liq = await window.PRICE_ENGINE.getPoolLiquidity(sc.address, "native");
+                if (!liq) continue;
+
+                const isSide0 = sc.address.toLowerCase() === liq.token0.toLowerCase();
+                const rawReserve = isSide0 ? liq.reserve0 : liq.reserve1;
+                const stableReserve = rawReserve / (10 ** 18); // stablecoin whitelist di sini semua 18 desimal
+
+                // Estimasi nilai TOTAL pool dalam USD â€” pakai reserve sisi
+                // stablecoin dikali 2 (asumsi kedua sisi pool ~setara nilai,
+                // sama seperti pendekatan liqValue di tempat lain di app ini).
+                const liquidityUsdEstimate = stableReserve * 2;
+
+                if (liquidityUsdEstimate >= MIN_STABLECOIN_LIQUIDITY_USD) {
+                    resolved = sc.address;
+                    break;
+                } else {
+                    console.warn(`[stablecoin whitelist] ${sc.symbol} likuiditas $${liquidityUsdEstimate.toFixed(2)} < ambang $${MIN_STABLECOIN_LIQUIDITY_USD}, dilewati`);
+                }
+            } catch (e) {
+                console.warn("[stablecoin whitelist] cek liquidity gagal untuk", sc.symbol, e);
+            }
+        }
+    }
+
+    _activeStablecoinCache = { addr: resolved, resolved: true, ts: Date.now() };
+    return resolved;
+}
+
+// ==========================
+// HARGA SDA LIVE (dengan fallback manual)
+// Dipakai di SEMUA tempat yang butuh harga SDA â€” supaya begitu ada
+// stablecoin baru yang lolos whitelist + ambang likuiditas, SEMUA jalur
+// (bukan cuma sebagian) otomatis ikut pindah, bukan cuma satu tempat.
+// ==========================
+let _liveSdaPriceCache = { value: null, ts: 0 };
+const SDA_PRICE_CACHE_TTL = 45_000;
+
+async function getLiveSdaPrice() {
+    if (_liveSdaPriceCache.value !== null && (Date.now() - _liveSdaPriceCache.ts) < SDA_PRICE_CACHE_TTL) {
+        return _liveSdaPriceCache.value;
+    }
+
+    let price = TOKEN_PRICE_USD["SDA"] || 0; // fallback manual
+
+    const stablecoinAddr = await getActiveStablecoinAddress();
+
+    if (stablecoinAddr && window.PRICE_ENGINE && typeof window.PRICE_ENGINE.getPrice === "function") {
+        try {
+            const ratio = await window.PRICE_ENGINE.getPrice("native", stablecoinAddr);
+            if (ratio > 0) price = ratio; // pool lolos whitelist + ambang â†’ pakai harga live
+        } catch (e) {
+            console.warn("[SDA price] getPrice via stablecoin gagal:", e);
+        }
+    }
+
+    _liveSdaPriceCache = { value: price, ts: Date.now() };
+    return price;
+}
 
 const _usdPriceCache = {}; // { [symbol]: { value, ts } }
 const PRICE_CACHE_TTL = 45_000;
@@ -126,14 +222,16 @@ async function getTokenUsdPrice(symbol) {
 
     let price = 0;
 
-    if (STABLECOIN_ADDRESS && window.PRICE_ENGINE && typeof window.PRICE_ENGINE.getPrice === "function") {
+    const stablecoinAddr = await getActiveStablecoinAddress();
+
+    if (stablecoinAddr && window.PRICE_ENGINE && typeof window.PRICE_ENGINE.getPrice === "function") {
         try {
             const tokenAddr = (symbol === "SDA")
                 ? "native"
                 : (window.TOKENS || []).find(t => t.symbol === symbol)?.address;
 
             if (tokenAddr) {
-                const ratio = await window.PRICE_ENGINE.getPrice(tokenAddr, STABLECOIN_ADDRESS);
+                const ratio = await window.PRICE_ENGINE.getPrice(tokenAddr, stablecoinAddr);
                 if (ratio > 0) price = ratio;
             }
         } catch (e) {
@@ -142,13 +240,13 @@ async function getTokenUsdPrice(symbol) {
     }
 
     if (!price) {
-        const sdaPrice = TOKEN_PRICE_USD["SDA"] || 0;
+        const sdaPrice = await getLiveSdaPrice();
 
         if (symbol === "SDA" || symbol === "WSDA") {
             price = sdaPrice;
         } else {
             // Kalau RPC baru saja gagal (ditandai flag global), jangan coba
-            // getPrice() satu-satu lagi di sini — itu yang memicu request
+            // getPrice() satu-satu lagi di sini â€” itu yang memicu request
             // storm waktu dipanggil untuk banyak token sekaligus dari renderAssets.
             // Langsung pakai harga manual, biar cepat & tidak nembak RPC lagi.
             if (!window._rpcDownUntil || Date.now() > window._rpcDownUntil) {
@@ -160,7 +258,7 @@ async function getTokenUsdPrice(symbol) {
                         if (ratio > 0) price = ratio * sdaPrice;
                     } catch (e) {
                         console.warn("[USD] getPrice gagal untuk", symbol, e);
-                        // Tandai RPC down selama 20 detik — cegah token
+                        // Tandai RPC down selama 20 detik â€” cegah token
                         // berikutnya dalam loop yang sama ikut mencoba RPC lagi.
                         window._rpcDownUntil = Date.now() + 20_000;
                     }
@@ -187,7 +285,7 @@ async function formatUSD(amount, symbol) {
 
 
 async function batchGetTokenUsdPrices(tokens) {
-    const sdaPrice = TOKEN_PRICE_USD["SDA"] || 0;
+    const sdaPrice = await getLiveSdaPrice();
     const out = {};
 
     if (!tokens.length) return out;
@@ -430,7 +528,7 @@ async function refreshAll() {
 
 
     // =================================================
-    // TOKEN LIST UPDATE — dibatch jadi 1 HTTP request
+    // TOKEN LIST UPDATE â€” dibatch jadi 1 HTTP request
     // untuk semua token, bukan N request terpisah.
     // Fallback otomatis ke cara lama kalau batching gagal.
     // =================================================
@@ -465,7 +563,7 @@ async function refreshAll() {
         } catch (e) {
             console.warn("[refreshAll] Batch pertama gagal, retry sekali dgn chunk lebih kecil:", e.message);
 
-            // RETRY — TETAP pakai batch (chunk kecil + delay antar chunk),
+            // RETRY â€” TETAP pakai batch (chunk kecil + delay antar chunk),
             // BUKAN loop satu-per-satu. Loop satu-per-satu itu yang bikin
             // fetch meledak jadi ratusan begitu RPC lambat/timeout.
             try {
@@ -490,7 +588,7 @@ async function refreshAll() {
             } catch (e2) {
                 console.warn("[refreshAll] RPC kemungkinan down/timeout, pakai saldo cache lama:", e2.message);
                 // Sengaja TIDAK fallback ke loop per-token.
-                // Biarkan saldo lama di localStorage tetap tampil —
+                // Biarkan saldo lama di localStorage tetap tampil â€”
                 // lebih baik data agak basi daripada nembak RPC ratusan kali.
             }
         }
