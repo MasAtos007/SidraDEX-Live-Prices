@@ -399,7 +399,7 @@
     </div>
     <div class="banner-note" id="baseNote">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-      <span>SDA/USD is a manual price — it'll switch to live once Sidra DEX has a stablecoin pool. Token rates below are already live on-chain.</span>
+      <span>SDA/USD is calculated live from a curated stablecoin pool (currently sUSDT). As this pool is not yet officially recognized on Sidra DEX, the price shown should be treated as an indicative estimate rather than a guaranteed 1:1 USD peg.</span>
     </div>
   </div>
 
@@ -579,6 +579,16 @@ async function loadTokenList() {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+// ==========================
+// TOKEN YANG DISEMBUNYIKAN DARI TAMPILAN
+// Token di sini TETAP ada di data/tokens.json (jangan dihapus dari sana),
+// tapi tidak ditampilkan di mana pun di UI — list utama, base picker,
+// maupun converter — supaya tidak membingungkan user. Cocok buat token
+// yang likuiditasnya masih terlalu tipis / statusnya belum jelas.
+// Tinggal hapus symbol dari array ini kapan saja untuk menampilkannya lagi.
+// ==========================
+const HIDDEN_TOKENS = ["USDX"];
 const MIN_PARTIAL_AGE_MS = 3 * 60 * 1000;
 
 const HISTORY_API = "https://script.google.com/macros/s/AKfycbyjB5nxZMpMN7BrQoDFlrR-tQimj1bh6W5pkmaqIjn_nskhwjTGlVgCe4E4O-BauLDC/exec";
@@ -703,7 +713,7 @@ const AGG_PRICE = (() => {
 
     const candidates = [
       { symbol: "SDA", name: "Sidra Digital Asset", icon: "sda.png", address: "native" },
-      ...allTokens.filter(t => t.type === "erc20")
+      ...allTokens.filter(t => t.type === "erc20" && !HIDDEN_TOKENS.includes(t.symbol))
     ];
 
     const base = state.base;
@@ -717,7 +727,7 @@ const AGG_PRICE = (() => {
 
     const list = candidates.filter(t => t.address.toLowerCase() !== baseAddrLower);
 
-    const sdaPrice = TOKEN_PRICE_USD["SDA"] || 0;
+    const sdaPrice = await getLiveSdaPrice();
 
     let baseUsdPrice = sdaPrice;
     if (!isBaseNative) {
@@ -779,8 +789,21 @@ const AGG_PRICE = (() => {
             row.pending = false;
             row.failed = !(baseRatio > 0);
           } else if (row) {
-            row.pending = false;
-            row.failed = true;
+            // Fallback manual: kalau tidak ada pool tapi token ini punya
+            // harga tetap di TOKEN_PRICE_USD (mis. stablecoin yang belum
+            // ada pool-nya di DEX), pakai itu — bukan langsung "no route".
+            const manualUsd = (typeof TOKEN_PRICE_USD !== "undefined" ? TOKEN_PRICE_USD[t.symbol] : 0) || 0;
+            if (manualUsd > 0) {
+              row.usdPrice = manualUsd;
+              row.change = get24hChange(getHistoryFor(t.symbol), sdaPrice > 0 ? manualUsd / sdaPrice : null);
+              row.rate = baseUsdPrice > 0 ? (manualUsd / baseUsdPrice) : null;
+              row.pending = false;
+              row.failed = false;
+              row.manualPrice = true;
+            } else {
+              row.pending = false;
+              row.failed = true;
+            }
           }
         } catch (e) {
           if (row) { row.pending = false; row.failed = true; }
@@ -1324,17 +1347,17 @@ function startHistoryAutoRefresh(){
     await loadSharedHistory();
     _lastHistoryRefreshAt = Date.now();
 
+    const sdaPriceLive = await getLiveSdaPrice();
+
     state.rows.forEach(r => {
       if (r.usdPrice === null) return;
-      const sdaPrice = (typeof TOKEN_PRICE_USD !== "undefined" ? TOKEN_PRICE_USD["SDA"] : 0) || 0;
-      const nativeRatio = sdaPrice > 0 ? r.usdPrice / sdaPrice : 0;
+      const nativeRatio = sdaPriceLive > 0 ? r.usdPrice / sdaPriceLive : 0;
       r.change = get24hChange(getHistoryFor(r.symbol), nativeRatio);
     });
 
     const isBaseNative = state.base.address === "native" || state.base.symbol === "WSDA";
     const baseNativeRatio = isBaseNative ? 1 : (await PRICE_ENGINE.getPrice(_engineAddrOf(state.base), "native")) || 0;
-    const sdaPriceNow = (typeof TOKEN_PRICE_USD !== "undefined" ? TOKEN_PRICE_USD["SDA"] : 0) || 0;
-    const baseUsdPriceNow = baseNativeRatio * sdaPriceNow;
+    const baseUsdPriceNow = baseNativeRatio * sdaPriceLive;
     updateBaseBanner(baseUsdPriceNow, get24hChange(getHistoryFor(state.base.symbol), baseNativeRatio));
 
     renderList();
@@ -2151,7 +2174,7 @@ function _basePickerCandidates(){
     // WSDA disembunyikan dari base picker — itu cuma representasi wrapped
     // dari SDA native yang sudah ada di atas, jadi kalau ikut ditampilkan
     // di sini cuma bikin dobel/bingung (dua opsi untuk hal yang sama).
-    ...all.filter(t => t.type === "erc20" && t.symbol !== "WSDA")
+    ...all.filter(t => t.type === "erc20" && t.symbol !== "WSDA" && !HIDDEN_TOKENS.includes(t.symbol))
   ];
 }
 
