@@ -589,6 +589,21 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // Tinggal hapus symbol dari array ini kapan saja untuk menampilkannya lagi.
 // ==========================
 const HIDDEN_TOKENS = ["USDX"];
+
+// ==========================
+// MODE SUMBER DATA — untuk uji coba & rollback cepat
+// "gs"      = ambil harga dari Google Sheet (via GS Web App) — cepat &
+//             ringan saat buka app, tapi data bisa telat sampai ~5 menit
+//             (mengikuti interval trigger collectPrices di Apps Script).
+// "onchain" = scan langsung ke chain seperti semula — paling live,
+//             tapi lambat saat buka app dan RPC-nya kena beban per user.
+//
+// ROLLBACK: kalau mode "gs" bermasalah, cukup ganti nilai ini balik ke
+// "onchain" — TIDAK perlu hapus/kembalikan kode apapun yang lain.
+// Sistem juga otomatis fallback ke on-chain kalau data GS gagal diambil
+// atau ternyata sudah terlalu basi (lihat scanAllFromGS / MAX_GS_STALENESS_MS).
+// ==========================
+const DATA_SOURCE_MODE = "gs"; // ganti ke "gs" untuk aktifkan mode baru
 const MIN_PARTIAL_AGE_MS = 3 * 60 * 1000;
 
 const HISTORY_API = "https://script.google.com/macros/s/AKfycbyjB5nxZMpMN7BrQoDFlrR-tQimj1bh6W5pkmaqIjn_nskhwjTGlVgCe4E4O-BauLDC/exec";
@@ -674,7 +689,12 @@ const AGG_PRICE = (() => {
     fill.style.width = p + "%";
   }
 
-  async function scanAll() {
+  // ==========================
+  // MODE "onchain" — logic asli, TIDAK DIUBAH. Ini yang selalu jalan kalau
+  // DATA_SOURCE_MODE = "onchain", dan juga jadi fallback otomatis kalau
+  // mode "gs" gagal (lihat dispatcher scanAll() di bawah).
+  // ==========================
+  async function scanAllOnChain() {
     if (_scanning) return;
     if (typeof PRICE_ENGINE === "undefined" || typeof PRICE_ENGINE.getAmountOut !== "function") {
       setStatus("PRICE_ENGINE not found", false);
@@ -848,6 +868,175 @@ const AGG_PRICE = (() => {
     if (state.sortBy === "liquidity") {
       ensureLiquidityData();
     }
+  }
+
+  // ==========================
+  // MODE "gs" — ambil harga dari Google Sheet (via GS Web App), bukan
+  // scan langsung ke chain. Jauh lebih cepat & ringan saat buka app,
+  // dengan trade-off data bisa telat sampai ~5 menit (interval trigger
+  // collectPrices di Apps Script).
+  //
+  // Cara kerja: semua harga yang dicatat GS itu SELALU relatif terhadap
+  // SDA (mis. "1 REGS = 2.5 SDA") — jadi kalau user pilih base pair lain
+  // (bukan SDA), rate-nya dihitung murni dari PEMBAGIAN dua harga yang
+  // sudah ada (nativeRatio_token / nativeRatio_base), TANPA perlu query
+  // on-chain baru sama sekali.
+  //
+  // Kalau data GS gagal diambil, formatnya tidak valid, atau ternyata
+  // sudah terlalu basi (trigger sempat berhenti lama), fungsi ini
+  // sengaja THROW error — supaya dispatcher scanAll() di bawah otomatis
+  // fallback ke scanAllOnChain(), bukan diam-diam nampilkan data usang.
+  // ==========================
+  const MAX_GS_STALENESS_MS = 20 * 60 * 1000; // toleransi ~4x interval trigger (5 menit) sebelum dianggap basi
+
+  async function fetchGsLatest() {
+    const res = await fetch(HISTORY_API + "?type=latest");
+    if (!res.ok) throw new Error("HTTP " + res.status + " saat fetch data Latest dari GS");
+    const rows = await res.json();
+    if (!Array.isArray(rows)) throw new Error("Format data Latest dari GS tidak valid (bukan array)");
+    return rows;
+  }
+
+  async function scanAllFromGS() {
+    if (_scanning) return;
+
+    _scanning = true;
+    _stopRequested = false;
+    document.getElementById("statusDot").className = "dot busy";
+    document.getElementById("statusText").textContent = "Loading...";
+    document.getElementById("refreshBtn").classList.add("spin");
+    // Tombol Stop sengaja tidak ditampilkan di mode ini — prosesnya cuma
+    // baca 1 file JSON kecil, bukan loop panjang per-token seperti on-chain,
+    // jadi praktis instan dan tidak ada yang perlu dibatalkan di tengah jalan.
+
+    renderSkeleton(8);
+
+    try {
+      const [allTokens, latestRows] = await Promise.all([
+        loadTokenList(),
+        fetchGsLatest()
+      ]);
+      await loadSharedHistory();
+
+      if (!allTokens.length) throw new Error("data/tokens.json kosong");
+
+      window.TOKENS = allTokens;
+
+      // Map symbol -> { price (nativeRatio vs SDA), timestamp }
+      const gsMap = {};
+      latestRows.forEach(r => {
+        const price = Number(r.price);
+        if (isFinite(price) && price > 0) {
+          gsMap[r.symbol] = { price, timestamp: Number(r.timestamp) };
+        }
+      });
+
+      // Staleness check — kalau trigger GS sempat berhenti berjam-jam
+      // (pernah kejadian sebelumnya), lebih baik gagal & fallback on-chain
+      // daripada diam-diam nampilkan harga yang sudah usang ke user.
+      const sdaEntry = gsMap["SDA"];
+      if (!sdaEntry || (Date.now() - sdaEntry.timestamp) > MAX_GS_STALENESS_MS) {
+        throw new Error("Data GS tidak ada / sudah lebih basi dari " + (MAX_GS_STALENESS_MS / 60000) + " menit");
+      }
+
+      const candidates = [
+        { symbol: "SDA", name: "Sidra Digital Asset", icon: "sda.png", address: "native" },
+        ...allTokens.filter(t => t.type === "erc20" && !HIDDEN_TOKENS.includes(t.symbol))
+      ];
+
+      const base = state.base;
+      const isNativeLike = (t) => t.address === "native" || t.symbol === "WSDA";
+      const baseAddrLower = base.address.toLowerCase();
+      const list = candidates.filter(t => t.address.toLowerCase() !== baseAddrLower);
+
+      const sdaPrice = await getLiveSdaPrice();
+
+      const baseNativeRatio = isNativeLike(base) ? 1 : (gsMap[base.symbol]?.price || 0);
+      const baseUsdPrice = baseNativeRatio > 0 ? baseNativeRatio * sdaPrice : 0;
+
+      window._baseUsdPriceCache = baseUsdPrice;
+      updateBaseBanner(baseUsdPrice, get24hChange(getHistoryFor(base.symbol), baseNativeRatio));
+
+      state.rows = list.map(t => {
+        const isTokNativeLike = isNativeLike(t);
+        const gsEntry = isTokNativeLike ? { price: 1 } : gsMap[t.symbol];
+        const nativeRatio = gsEntry ? gsEntry.price : null;
+
+        const row = {
+          address: t.address, symbol: t.symbol, name: t.name, icon: t.icon,
+          rate: null, usdPrice: null, nativeRatio: null, change: null,
+          pending: false, failed: false,
+          liqBase: undefined, liqToken: undefined
+        };
+
+        if (nativeRatio && nativeRatio > 0 && baseNativeRatio > 0) {
+          // Sama seperti mode on-chain: token whitelist stablecoin (mis.
+          // sUSDT) dipatok $1.00 di tampilan harganya sendiri.
+          const isWhitelistedStable = typeof STABLECOIN_WHITELIST !== "undefined"
+            && STABLECOIN_WHITELIST.some(sc => sc.symbol === t.symbol);
+
+          row.usdPrice = isWhitelistedStable ? 1 : (nativeRatio * sdaPrice);
+          row.nativeRatio = nativeRatio;
+          row.change = get24hChange(getHistoryFor(t.symbol), nativeRatio);
+          // Rate vs base pair = pembagian dua harga yang sudah SDA-relatif —
+          // pendekatan ini TIDAK mensimulasikan price-impact per pasangan
+          // seperti mode on-chain (getAmountInCurve), jadi sedikit kurang
+          // presisi untuk trade besar — trade-off wajar mengingat sumber
+          // datanya sendiri sudah delay hingga ~5 menit.
+          row.rate = nativeRatio / baseNativeRatio;
+        } else {
+          // Fallback manual: token belum pernah tercatat di GS (mis. baru
+          // ditambahkan ke tokens.json, belum kebagian siklus trigger) atau
+          // memang belum ada pool — pakai TOKEN_PRICE_USD kalau ada.
+          const manualUsd = (typeof TOKEN_PRICE_USD !== "undefined" ? TOKEN_PRICE_USD[t.symbol] : 0) || 0;
+          if (manualUsd > 0) {
+            row.usdPrice = manualUsd;
+            row.change = get24hChange(getHistoryFor(t.symbol), sdaPrice > 0 ? manualUsd / sdaPrice : null);
+            row.rate = baseUsdPrice > 0 ? (manualUsd / baseUsdPrice) : null;
+            row.manualPrice = true;
+          } else {
+            row.failed = true;
+          }
+        }
+
+        return row;
+      });
+
+      renderList();
+      setStatus("Live · via Sheet (~5m delay)", true);
+      refreshConverterIfOpen();
+
+      if (state.sortBy === "liquidity") {
+        ensureLiquidityData();
+      }
+    } finally {
+      _scanning = false;
+      document.getElementById("refreshBtn").classList.remove("spin");
+      document.getElementById("stopScanBtn").style.display = "none";
+      setProgress(null);
+    }
+  }
+
+  // ==========================
+  // DISPATCHER — titik masuk tunggal yang dipanggil dari luar (tombol
+  // refresh, auto-load pertama, dst). Nama & signature-nya SAMA seperti
+  // sebelumnya (scanAll), jadi semua pemanggil lain di file ini tidak
+  // perlu diubah sama sekali.
+  // ==========================
+  async function scanAll() {
+    if (_scanning) return;
+
+    if (DATA_SOURCE_MODE === "gs") {
+      try {
+        await scanAllFromGS();
+        return;
+      } catch (e) {
+        console.warn("[scanAll] Mode GS gagal, fallback ke on-chain:", e);
+        // Sengaja lanjut ke scanAllOnChain() di bawah, bukan berhenti di sini.
+      }
+    }
+
+    await scanAllOnChain();
   }
 
   function stopScan() {
