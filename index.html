@@ -1342,7 +1342,7 @@ let _volRequestId = 0;
 // ROLLBACK SWITCH: ganti nilai ini ke `7 * DAY_MS` untuk kembali ke default
 // 7D begitu histori GS sudah normal lagi tanpa gap. Cuma satu tempat ini
 // yang perlu diubah — dipakai di semua tempat default range di-set.
-const DEFAULT_CHART_RANGE_MS = DAY_MS;
+const DEFAULT_CHART_RANGE_MS = 7 * DAY_MS;
 
 let _detailRangeMs = DEFAULT_CHART_RANGE_MS;
 let _scrubPoints = null;
