@@ -752,6 +752,65 @@ function get24hChange(history, currentPrice) {
   return null;
 }
 
+// ================= GANTI DI SINI KALAU STABLECOIN ACUAN BERUBAH =================
+// Satu-satunya tempat yang perlu diedit kalau pool acuan harga SDA/USD pindah
+// dari sUSDT ke stablecoin lain (mis. sUSDC, sBUSD, dst). Harus sama persis
+// (case-sensitive) dengan symbol token itu di tokens.json / STABLECOIN_WHITELIST
+// (balance.js) — supaya banner SDA ikut histori token yang benar.
+const SDA_PRICE_ANCHOR_SYMBOL = "sUSDT";
+// ==================================================================================
+
+// SDA dipasangkan dengan dirinya sendiri (rasio native selalu 1), jadi
+// get24hChange biasa selalu menghasilkan 0%. Harga SDA sebenarnya diturunkan
+// dari pool stablecoin acuan di atas (lihat getLiveSdaPrice()), jadi
+// %perubahan banner SDA juga harus ikut acuan itu — TAPI arahnya kebalikan:
+// history token acuan menyimpan rasio "SDA per 1 token acuan". Kalau rasio
+// itu TURUN (butuh lebih sedikit SDA untuk 1 token acuan yg ~$1), artinya
+// SDA jadi lebih MAHAL dalam USD -> banner SDA harus NAIK, begitu juga
+// sebaliknya. Makanya dihitung lewat reciprocal, bukan cuma dibalik tandanya.
+function getAnchorStableSymbol() {
+  // STABLECOIN_WHITELIST (dari balance.js) cuma dipakai untuk validasi ringan
+  // biar ketauan kalau SDA_PRICE_ANCHOR_SYMBOL di atas typo / lupa di-update
+  // — bukan sumber kebenaran, supaya urutan array di balance.js tidak
+  // diam-diam mengubah simbol acuan di sini.
+  if (typeof STABLECOIN_WHITELIST !== "undefined" && STABLECOIN_WHITELIST.length
+      && !STABLECOIN_WHITELIST.some(sc => sc.symbol === SDA_PRICE_ANCHOR_SYMBOL)) {
+    console.warn(
+      "[banner] SDA_PRICE_ANCHOR_SYMBOL ('" + SDA_PRICE_ANCHOR_SYMBOL +
+      "') tidak ditemukan di STABLECOIN_WHITELIST — cek apakah sudah pindah stablecoin acuan."
+    );
+  }
+  return SDA_PRICE_ANCHOR_SYMBOL;
+}
+
+function getNativeSdaBannerChange(sdaUsdPriceNow) {
+  if (!sdaUsdPriceNow) return null;
+
+  const anchorSymbol = getAnchorStableSymbol();
+  const history = getHistoryFor(anchorSymbol);
+  if (!history || !history.length) return null;
+
+  const target = Date.now() - DAY_MS;
+  let ref = null;
+  for (const h of history) if (h.t <= target) ref = h;
+
+  let partial = false, ageMs = DAY_MS;
+  if (!ref) {
+    const earliest = history[0];
+    const age = earliest ? Date.now() - earliest.t : 0;
+    if (earliest && earliest.p && age >= MIN_PARTIAL_AGE_MS) {
+      ref = earliest; partial = true; ageMs = age;
+    }
+  }
+  if (!ref || !ref.p) return null;
+
+  // ref.p = rasio SDA-per-anchor 24 jam lalu. Anchor ~dipatok $1, jadi harga
+  // SDA saat itu (implied) = 1 / ref.p. Bandingkan dengan harga live sekarang
+  // -> hasilnya otomatis kebalikan dari %perubahan token acuan itu sendiri.
+  const pct = (sdaUsdPriceNow * ref.p - 1) * 100;
+  return { pct, partial, ageMs };
+}
+
 function fmtDuration(ms) {
   const mins = Math.round(ms / 60000);
   if (mins < 60) return mins + "m";
@@ -856,9 +915,15 @@ const AGG_PRICE = (() => {
         baseUsdPrice = baseNativeRatio > 0 ? baseNativeRatio * sdaPrice : 0;
       } catch { baseUsdPrice = 0; }
     }
-    const baseNativeRatioForChange = isBaseNative ? 1 : (await PRICE_ENGINE.getPrice(baseEngineAddr, "native")) || 0;
     window._baseUsdPriceCache = baseUsdPrice;
-    updateBaseBanner(baseUsdPrice, get24hChange(getHistoryFor(base.symbol), baseNativeRatioForChange));
+    let baseChangeForBanner;
+    if (isBaseNative) {
+      baseChangeForBanner = getNativeSdaBannerChange(baseUsdPrice);
+    } else {
+      const baseNativeRatioForChange = (await PRICE_ENGINE.getPrice(baseEngineAddr, "native")) || 0;
+      baseChangeForBanner = get24hChange(getHistoryFor(base.symbol), baseNativeRatioForChange);
+    }
+    updateBaseBanner(baseUsdPrice, baseChangeForBanner);
 
     // liqBase/liqToken deliberately start "undefined" (not null) — that's
     // how ensureLiquidityData() tells "never fetched yet" apart from
@@ -1060,7 +1125,9 @@ const AGG_PRICE = (() => {
       const baseUsdPrice = baseNativeRatio > 0 ? baseNativeRatio * sdaPrice : 0;
 
       window._baseUsdPriceCache = baseUsdPrice;
-      updateBaseBanner(baseUsdPrice, get24hChange(getHistoryFor(base.symbol), baseNativeRatio));
+      updateBaseBanner(baseUsdPrice, isNativeLike(base)
+        ? getNativeSdaBannerChange(baseUsdPrice)
+        : get24hChange(getHistoryFor(base.symbol), baseNativeRatio));
 
       state.rows = list.map(t => {
         const isTokNativeLike = isNativeLike(t);
@@ -1686,7 +1753,9 @@ function startHistoryAutoRefresh(){
       const isBaseNative = state.base.address === "native" || state.base.symbol === "WSDA";
       const baseNativeRatio = isBaseNative ? 1 : (await PRICE_ENGINE.getPrice(_engineAddrOf(state.base), "native")) || 0;
       const baseUsdPriceNow = baseNativeRatio * sdaPriceLive;
-      updateBaseBanner(baseUsdPriceNow, get24hChange(getHistoryFor(state.base.symbol), baseNativeRatio));
+      updateBaseBanner(baseUsdPriceNow, isBaseNative
+        ? getNativeSdaBannerChange(baseUsdPriceNow)
+        : get24hChange(getHistoryFor(state.base.symbol), baseNativeRatio));
 
       renderList();
     }
