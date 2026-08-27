@@ -603,7 +603,7 @@ const HIDDEN_TOKENS = ["USDX"];
 // Sistem juga otomatis fallback ke on-chain kalau data GS gagal diambil
 // atau ternyata sudah terlalu basi (lihat scanAllFromGS / MAX_GS_STALENESS_MS).
 // ==========================
-const DATA_SOURCE_MODE = "gs"; // ganti ke "gs" untuk aktifkan mode baru
+const DATA_SOURCE_MODE = "gs"; // ganti ke "onchain" untuk rollback
 const MIN_PARTIAL_AGE_MS = 3 * 60 * 1000;
 
 const HISTORY_API = "https://script.google.com/macros/s/AKfycbyjB5nxZMpMN7BrQoDFlrR-tQimj1bh6W5pkmaqIjn_nskhwjTGlVgCe4E4O-BauLDC/exec";
@@ -897,19 +897,24 @@ const AGG_PRICE = (() => {
     return rows;
   }
 
-  async function scanAllFromGS() {
+  async function scanAllFromGS(opts) {
+    opts = opts || {};
+    const silent = !!opts.silent; // true = update data tanpa bikin list "kedip" (skeleton/status loading) — dipakai auto-refresh background, BUKAN untuk klik manual
+
     if (_scanning) return;
 
     _scanning = true;
     _stopRequested = false;
-    document.getElementById("statusDot").className = "dot busy";
-    document.getElementById("statusText").textContent = "Loading...";
-    document.getElementById("refreshBtn").classList.add("spin");
-    // Tombol Stop sengaja tidak ditampilkan di mode ini — prosesnya cuma
-    // baca 1 file JSON kecil, bukan loop panjang per-token seperti on-chain,
-    // jadi praktis instan dan tidak ada yang perlu dibatalkan di tengah jalan.
 
-    renderSkeleton(8);
+    if (!silent) {
+      document.getElementById("statusDot").className = "dot busy";
+      document.getElementById("statusText").textContent = "Loading...";
+      document.getElementById("refreshBtn").classList.add("spin");
+      // Tombol Stop sengaja tidak ditampilkan di mode ini — prosesnya cuma
+      // baca 1 file JSON kecil, bukan loop panjang per-token seperti on-chain,
+      // jadi praktis instan dan tidak ada yang perlu dibatalkan di tengah jalan.
+      renderSkeleton(8);
+    }
 
     try {
       const [allTokens, latestRows] = await Promise.all([
@@ -1003,7 +1008,7 @@ const AGG_PRICE = (() => {
       });
 
       renderList();
-      setStatus("Live · via Sheet (~5m delay)", true);
+      setStatus("Live · Sidra Chain", true);
       refreshConverterIfOpen();
 
       if (state.sortBy === "liquidity") {
@@ -1011,24 +1016,28 @@ const AGG_PRICE = (() => {
       }
     } finally {
       _scanning = false;
-      document.getElementById("refreshBtn").classList.remove("spin");
-      document.getElementById("stopScanBtn").style.display = "none";
-      setProgress(null);
+      if (!silent) {
+        document.getElementById("refreshBtn").classList.remove("spin");
+        document.getElementById("stopScanBtn").style.display = "none";
+        setProgress(null);
+      }
     }
   }
 
   // ==========================
   // DISPATCHER — titik masuk tunggal yang dipanggil dari luar (tombol
-  // refresh, auto-load pertama, dst). Nama & signature-nya SAMA seperti
-  // sebelumnya (scanAll), jadi semua pemanggil lain di file ini tidak
-  // perlu diubah sama sekali.
+  // refresh, auto-load pertama, auto-refresh berkala, dst). Nama &
+  // signature-nya kompatibel dengan sebelumnya (scanAll tanpa argumen =
+  // perilaku normal dengan indikator loading), jadi semua pemanggil lama
+  // di file ini tidak perlu diubah. opts.silent diteruskan ke mode "gs"
+  // untuk update data di background tanpa bikin list "kedip".
   // ==========================
-  async function scanAll() {
+  async function scanAll(opts) {
     if (_scanning) return;
 
     if (DATA_SOURCE_MODE === "gs") {
       try {
-        await scanAllFromGS();
+        await scanAllFromGS(opts);
         return;
       } catch (e) {
         console.warn("[scanAll] Mode GS gagal, fallback ke on-chain:", e);
@@ -1543,29 +1552,45 @@ function startHistoryAutoRefresh(){
   setInterval(updateRefreshIndicatorText, 15000);
 
   setInterval(async () => {
-    await loadSharedHistory();
     _lastHistoryRefreshAt = Date.now();
 
-    const sdaPriceLive = await getLiveSdaPrice();
+    if (DATA_SOURCE_MODE === "gs") {
+      // Mode GS itu ringan (cuma fetch 1 file JSON kecil dari Sheet), jadi
+      // aman untuk auto-refresh PENUH tiap 5 menit — harga & rate ikut
+      // ter-update, bukan cuma %perubahan seperti sebelumnya. Pakai
+      // {silent:true} supaya list tidak "kedip" (skeleton) sementara user
+      // mungkin sedang scroll/baca. Otomatis lewat dispatcher scanAll(),
+      // jadi kalau GS gagal, tetap fallback ke on-chain seperti biasa.
+      await AGG_PRICE.scanAll({ silent: true });
+    } else {
+      // Mode on-chain: scan penuh itu MAHAL (RPC per token, per user) kalau
+      // dipanggil otomatis tiap 5 menit — sengaja TETAP cuma refresh histori
+      // & %perubahan di sini seperti desain semula. Harga tetap perlu
+      // di-refresh manual oleh user (tombol refresh) di mode ini.
+      await loadSharedHistory();
 
-    state.rows.forEach(r => {
-      if (r.usdPrice === null) return;
-      // Pakai rasio mentah yang sudah tersimpan dari hasil scan (lebih akurat
-      // & konsisten dengan histori GS) — JANGAN reverse-derive dari usdPrice,
-      // karena untuk token whitelist stablecoin (mis. sUSDT) usdPrice sengaja
-      // dipatok $1 dan tidak lagi merepresentasikan rasio pool sebenarnya.
-      const nativeRatio = (r.nativeRatio !== null && r.nativeRatio !== undefined)
-        ? r.nativeRatio
-        : (sdaPriceLive > 0 ? r.usdPrice / sdaPriceLive : 0); // fallback untuk baris lama/manual yang belum punya nativeRatio
-      r.change = get24hChange(getHistoryFor(r.symbol), nativeRatio);
-    });
+      const sdaPriceLive = await getLiveSdaPrice();
 
-    const isBaseNative = state.base.address === "native" || state.base.symbol === "WSDA";
-    const baseNativeRatio = isBaseNative ? 1 : (await PRICE_ENGINE.getPrice(_engineAddrOf(state.base), "native")) || 0;
-    const baseUsdPriceNow = baseNativeRatio * sdaPriceLive;
-    updateBaseBanner(baseUsdPriceNow, get24hChange(getHistoryFor(state.base.symbol), baseNativeRatio));
+      state.rows.forEach(r => {
+        if (r.usdPrice === null) return;
+        // Pakai rasio mentah yang sudah tersimpan dari hasil scan (lebih akurat
+        // & konsisten dengan histori GS) — JANGAN reverse-derive dari usdPrice,
+        // karena untuk token whitelist stablecoin (mis. sUSDT) usdPrice sengaja
+        // dipatok $1 dan tidak lagi merepresentasikan rasio pool sebenarnya.
+        const nativeRatio = (r.nativeRatio !== null && r.nativeRatio !== undefined)
+          ? r.nativeRatio
+          : (sdaPriceLive > 0 ? r.usdPrice / sdaPriceLive : 0); // fallback untuk baris lama/manual yang belum punya nativeRatio
+        r.change = get24hChange(getHistoryFor(r.symbol), nativeRatio);
+      });
 
-    renderList();
+      const isBaseNative = state.base.address === "native" || state.base.symbol === "WSDA";
+      const baseNativeRatio = isBaseNative ? 1 : (await PRICE_ENGINE.getPrice(_engineAddrOf(state.base), "native")) || 0;
+      const baseUsdPriceNow = baseNativeRatio * sdaPriceLive;
+      updateBaseBanner(baseUsdPriceNow, get24hChange(getHistoryFor(state.base.symbol), baseNativeRatio));
+
+      renderList();
+    }
+
     refreshConverterIfOpen();
 
     if (_detailToken) {
