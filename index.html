@@ -46,7 +46,7 @@
   body[data-theme="light"]{
     --bg:#f7f6f3; --surface-1:#ffffff; --surface-2:#f0efe9; --surface-3:#e6e4dc;
     --border:#dedcd2; --text-primary:#1a1a17; --text-secondary:#6b6a63; --text-muted:#9a988e;
-    --amber:#d9860a; --green:#1f9e6e; --red:#c9433d;
+    --amber:#d9860a; --green:#148a5c; --red:#c22f28;
   }
   body[data-theme="light"] .icon-btn{background:rgba(217,134,10,.08);border-color:rgba(217,134,10,.45);color:var(--amber);}
   body[data-theme="light"] .icon-btn:active{background:rgba(217,134,10,.18);}
@@ -63,7 +63,23 @@
   @media (min-width:1300px){ :root{ --app-max:1040px; } }
   .screen{width:100%;max-width:var(--app-max);min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;padding:20px 18px 24px;}
   @media (min-width:700px){ .screen{ padding:24px 24px 32px; } }
-  .num{font-family:'Space Grotesk',sans-serif;}
+  .num{font-family:'Space Grotesk',sans-serif;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;}
+
+  /* ===== Skeleton shimmer (baris yang masih pending/loading) ===== */
+  .skeleton-bar{
+    display:inline-block;border-radius:4px;background:var(--surface-3);
+    background-image:linear-gradient(90deg, var(--surface-3) 0%, var(--surface-2) 50%, var(--surface-3) 100%);
+    background-size:200% 100%;animation:skeleton-shimmer 1.4s ease-in-out infinite;
+  }
+  .skeleton-bar--price{width:64px;height:14px;margin-left:auto;}
+  .skeleton-bar--sub{width:44px;height:11px;}
+  @keyframes skeleton-shimmer{
+    0%{background-position:200% 0;}
+    100%{background-position:-200% 0;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .skeleton-bar{animation:none;}
+  }
 
   .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
   .brand{display:flex;align-items:center;gap:10px;min-width:0;}
@@ -72,6 +88,8 @@
   .brand-name{font-size:15px;font-weight:600;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .brand-sub{font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .dot{width:5px;height:5px;border-radius:50%;background:var(--green);display:inline-block;}
+  .wake-lock-icon{display:inline-flex;align-items:center;color:var(--text-muted);opacity:.45;flex-shrink:0;transition:color .2s,opacity .2s;}
+  .wake-lock-icon.active{color:var(--amber);opacity:1;}
   .dot.off{background:var(--red);}
   .dot.busy{background:var(--amber);}
   .icon-btn{width:34px;height:34px;border-radius:50%;background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.45);display:flex;align-items:center;justify-content:center;color:var(--amber);cursor:pointer;}
@@ -98,7 +116,7 @@
   .banner-label{font-size:11px;color:rgba(244,243,240,.7);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
   .banner-row{display:flex;align-items:flex-end;justify-content:space-between;}
   .banner-price{font-size:30px;font-weight:600;letter-spacing:-.01em;color:#f4f3f0;}
-  .up{color:var(--green);} .down{color:var(--red);} .flat{color:var(--text-muted);}
+  .up{color:var(--green);font-weight:600;} .down{color:var(--red);font-weight:600;} .flat{color:var(--text-muted);}
   .banner-change{font-size:13px;font-weight:500;margin-top:4px;}
   .banner-change.flat{color:rgba(244,243,240,.6);}
   .base-chip{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);border-radius:999px;padding:6px 10px 6px 6px;font-size:12px;color:rgba(244,243,240,.75);margin-top:12px;cursor:pointer;user-select:none;}
@@ -192,6 +210,13 @@
   }
 
   .list-head{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-muted);padding:0 4px 8px;}
+  .stale-banner{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.35);
+    border-radius:var(--radius-md);padding:8px 12px;margin-bottom:10px;
+    font-size:11.5px;color:var(--amber);
+  }
+  .stale-banner-action{font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;text-decoration:underline;}
   .list-head-right{display:flex;align-items:center;gap:8px;}
   .list-head-right span{cursor:pointer;user-select:none;}
   .liq-mode-btn{width:22px;height:22px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-muted);cursor:pointer;flex-shrink:0;padding:0;}
@@ -236,7 +261,7 @@
   .token-price{font-size:13.5px;font-weight:600;}
   .token-sub-row{display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:2px;}
   .token-usd{font-size:11px;color:var(--text-secondary);}
-  .token-change{font-size:11px;}
+  .token-change{font-size:11.5px;font-weight:700;letter-spacing:.01em;}
   .row.pending .token-price, .row.pending .token-change, .row.pending .token-usd{color:var(--text-muted);}
   .row.failed .token-price{color:var(--text-muted);}
 
@@ -377,7 +402,9 @@
       <div class="brand-mark"><img src="img/app-logo.png" alt="SDA" onerror="this.parentElement.textContent='S'"></div>
       <div style="min-width:0;">
         <div class="brand-name">Sidra DEX Live</div>
-        <div class="brand-sub"><span class="dot" id="statusDot"></span><span id="statusText">Connecting...</span></div>
+        <div class="brand-sub"><span class="dot" id="statusDot"></span><span id="statusText">Connecting...</span><span id="wakeLockIcon" class="wake-lock-icon" title="Wake lock status" aria-hidden="true">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </span></div>
       </div>
     </div>
     <div style="display:flex;gap:8px;flex-shrink:0;">
@@ -471,6 +498,11 @@
     </div>
   </div>
   <div id="stickyHeaderSpacer" style="height:0;"></div>
+
+  <div class="stale-banner" id="staleBanner" style="display:none;" role="status">
+    <span id="staleBannerText">Data mungkin usang — memperbarui…</span>
+    <span class="stale-banner-action" id="staleBannerAction" onclick="manualStaleRefresh()" style="display:none;">Refresh sekarang</span>
+  </div>
 
   <div class="list-head">
     <span>Token</span>
@@ -1314,12 +1346,17 @@ function fmtUsd(n){
   return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: n < 1 ? 6 : 2 });
 }
 
-// Formatter angka reserve mentah (dipakai mode sort Liquidity) — beda dari
-// fmtUsd karena ini bukan uang, jadi tanpa tanda "$" dan tanpa minimum 2 desimal.
+// Formatter angka reserve mentah (dipakai mode sort Liquidity & converter) —
+// beda dari fmtUsd karena ini bukan uang, jadi tanpa tanda "$" dan tanpa
+// minimum 2 desimal. PENTING: jangan pakai toExponential() di sini — angka
+// kecil (mis. hasil konversi 1 SDA ke token yang jauh lebih mahal) jadi
+// tampil aneh buat kebanyakan user (mis. "9.93e-4"). Dipakai tingkatan
+// presisi seperti fmtRate supaya tetap desimal biasa & mudah dibaca.
 function fmtLiqNum(n){
   if (n === null || n === undefined || !isFinite(n)) return "…";
-  if (n < 0.01) return n.toExponential(2);
-  return n.toLocaleString("en-US", { maximumFractionDigits: n < 1000 ? 4 : 0 });
+  if (n === 0) return "0";
+  const decimals = n < 0.001 ? 8 : n < 1 ? 6 : n < 1000 ? 4 : 0;
+  return n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: decimals });
 }
 
 function setStatus(text, ok){
@@ -1583,16 +1620,28 @@ function renderList(){
       // tempat dengan angka reserve yang bisa panjang.
       rightHtml = "";
     } else {
+      // WSDA cuma representasi wrapped dari SDA (rasio native-nya dipatok
+      // selalu 1), jadi %perubahan 24h-nya SECARA DESAIN tidak akan pernah
+      // punya makna / data histori sendiri — beda dgn token lain yang
+      // "waiting for data" cuma sementara sampai histori terisi. Makanya
+      // WSDA ditandai badge "1:1 wrapped" yang tetap, bukan "waiting for
+      // data" yang menyiratkan datanya akan datang (padahal tidak akan).
+      const isWrappedNative = t.symbol === "WSDA";
       const up = t.change === null ? null : t.change.pct >= 0;
-      const changeClass = up === null ? "flat" : (up ? "up" : "down");
-      const changeText = t.pending ? "…" : t.failed ? "no route" :
+      const changeClass = isWrappedNative ? "flat" : (up === null ? "flat" : (up ? "up" : "down"));
+      const changeText = isWrappedNative ? "1:1 wrapped" :
+        t.pending ? "…" : t.failed ? "no route" :
         t.change === null ? "waiting for data" :
         (up ? "↑ " : "↓ ") + Math.abs(t.change.pct).toFixed(1) + "%" + (t.change.partial ? (" ·" + fmtDuration(t.change.ageMs)) : "");
 
-      const rateText = t.pending ? "…" : t.failed || t.rate === null ? "no route" : fmtRate(t.rate, state.base.symbol);
+      const rateText = t.pending ? "" : t.failed || t.rate === null ? "no route" : fmtRate(t.rate, state.base.symbol);
       const usdText  = t.pending ? "" : t.failed ? "" : fmtUsd(t.usdPrice);
 
-      rightHtml = `
+      rightHtml = t.pending ? `
+        <div class="skeleton-bar skeleton-bar--price"></div>
+        <div class="token-sub-row" style="justify-content:flex-end;">
+          <div class="skeleton-bar skeleton-bar--sub"></div>
+        </div>` : `
         <div class="token-price num">${rateText}</div>
         <div class="token-sub-row">
           ${usdText ? `<span class="token-usd num">${usdText}</span>` : ""}
@@ -1715,65 +1764,202 @@ let _scrubPoints = null;
 const HISTORY_REFRESH_MS = 5 * 60 * 1000;
 let _lastHistoryRefreshAt = Date.now();
 
-function startHistoryAutoRefresh(){
-  setInterval(updateRefreshIndicatorText, 15000);
+// ================= WAKE LOCK: cegah layar mati saat auto-refresh =================
+// Kalau layar mati/HP terkunci, browser (termasuk tab yang sedang dibuka)
+// biasanya di-throttle habis-habisan oleh OS — setInterval auto-refresh bisa
+// berhenti total sampai layar dinyalakan lagi. Screen Wake Lock API menahan
+// layar supaya tetap nyala SELAMA tab ini aktif, jadi auto-refresh 5 menit
+// tidak putus. User tidak perlu tap layar terus buat jaga-jaga nyala.
+//
+// Catatan penting soal Wake Lock API:
+// - Butuh HTTPS (atau localhost) dan browser yang support (Chrome/Edge Android
+//   & desktop terbaru; belum semua browser, misalnya belum ada di iOS Safari
+//   versi lama — kalau tidak didukung, fungsi ini gagal diam-diam, tidak error).
+// - Lock otomatis lepas kalau tab di-minimize / disembunyikan (visibilitychange
+//   ke "hidden"), itu batasan dari OS/browser, bukan sesuatu yang bisa kita
+//   paksa dari sini. Makanya begitu tab kembali terlihat, kita re-acquire lagi.
+// - Acquire pertama kali WAJIB dipicu dari user gesture (klik/tap) di sebagian
+//   browser — makanya kita pasang listener "sekali pakai" di klik/tap pertama
+//   di halaman, supaya user TIDAK perlu tahu atau sengaja menekan tombol apa pun
+//   untuk mengaktifkannya; tap pertama yang mana pun (buka token, klik base
+//   pair, dst) sudah otomatis menyalakannya.
+let _wakeLock = null;
 
-  setInterval(async () => {
-    _lastHistoryRefreshAt = Date.now();
-
-    if (getDataSourceMode() === "gs") {
-      // Mode GS itu ringan (cuma fetch 1 file JSON kecil dari Sheet), jadi
-      // aman untuk auto-refresh PENUH tiap 5 menit — harga & rate ikut
-      // ter-update, bukan cuma %perubahan seperti sebelumnya. Pakai
-      // {silent:true} supaya list tidak "kedip" (skeleton) sementara user
-      // mungkin sedang scroll/baca. Otomatis lewat dispatcher scanAll(),
-      // jadi kalau GS gagal, tetap fallback ke on-chain seperti biasa.
-      await AGG_PRICE.scanAll({ silent: true });
-    } else {
-      // Mode on-chain: scan penuh itu MAHAL (RPC per token, per user) kalau
-      // dipanggil otomatis tiap 5 menit — sengaja TETAP cuma refresh histori
-      // & %perubahan di sini seperti desain semula. Harga tetap perlu
-      // di-refresh manual oleh user (tombol refresh) di mode ini.
-      await loadSharedHistory();
-
-      const sdaPriceLive = await getLiveSdaPrice();
-
-      state.rows.forEach(r => {
-        if (r.usdPrice === null) return;
-        // Pakai rasio mentah yang sudah tersimpan dari hasil scan (lebih akurat
-        // & konsisten dengan histori GS) — JANGAN reverse-derive dari usdPrice,
-        // karena untuk token whitelist stablecoin (mis. sUSDT) usdPrice sengaja
-        // dipatok $1 dan tidak lagi merepresentasikan rasio pool sebenarnya.
-        const nativeRatio = (r.nativeRatio !== null && r.nativeRatio !== undefined)
-          ? r.nativeRatio
-          : (sdaPriceLive > 0 ? r.usdPrice / sdaPriceLive : 0); // fallback untuk baris lama/manual yang belum punya nativeRatio
-        r.change = get24hChange(getHistoryFor(r.symbol), nativeRatio);
-      });
-
-      const isBaseNative = state.base.address === "native" || state.base.symbol === "WSDA";
-      const baseNativeRatio = isBaseNative ? 1 : (await PRICE_ENGINE.getPrice(_engineAddrOf(state.base), "native")) || 0;
-      const baseUsdPriceNow = baseNativeRatio * sdaPriceLive;
-      updateBaseBanner(baseUsdPriceNow, isBaseNative
-        ? getNativeSdaBannerChange(baseUsdPriceNow)
-        : get24hChange(getHistoryFor(state.base.symbol), baseNativeRatio));
-
-      renderList();
-    }
-
-    refreshConverterIfOpen();
-
-    if (_detailToken) {
-      const fresh = state.rows.find(r => r.symbol === _detailToken.symbol);
-      if (fresh) {
-        _detailToken = fresh;
-        renderTokenDetail(fresh);
-        loadTokenDetailLiquidity(fresh);
-        loadTokenDetailVolume(fresh);
-        flashRefreshIndicator();
-      }
-    }
-  }, HISTORY_REFRESH_MS);
+// Indikator kecil di sebelah status koneksi (lihat #wakeLockIcon di HTML) —
+// biar user yang browser/OS-nya tidak dukung Wake Lock API tetap TAHU dan
+// bisa jaga layar sendiri, bukan diam-diam gagal tanpa sinyal apa pun.
+function updateWakeLockIcon(){
+  const el = document.getElementById("wakeLockIcon");
+  if (!el) return;
+  const active = _wakeLock !== null;
+  el.classList.toggle("active", active);
+  el.title = active
+    ? "Layar dijaga tetap nyala supaya auto-refresh tidak berhenti"
+    : ("wakeLock" in navigator
+        ? "Wake lock belum aktif — sentuh layar sekali untuk mengaktifkan"
+        : "Browser ini tidak mendukung wake lock — jaga layar tetap nyala secara manual");
 }
+
+async function acquireWakeLock(){
+  if (!("wakeLock" in navigator)) { updateWakeLockIcon(); return; } // tidak didukung browser ini, diamkan saja
+  try {
+    _wakeLock = await navigator.wakeLock.request("screen");
+    _wakeLock.addEventListener("release", () => { _wakeLock = null; updateWakeLockIcon(); });
+    updateWakeLockIcon();
+  } catch (e) {
+    // Ditolak (mis. belum ada user gesture, atau tab sedang hidden) — aman
+    // diabaikan, nanti dicoba lagi di kesempatan berikutnya.
+    _wakeLock = null;
+    updateWakeLockIcon();
+  }
+}
+
+function setupWakeLockAutoManage(){
+  // Coba langsung (kalau browser kasih izin tanpa gesture tambahan)...
+  acquireWakeLock();
+
+  // ...dan pasang fallback: acquire di interaksi pertama, biar user tidak
+  // perlu tahu ada tombol khusus untuk ini.
+  const onFirstInteraction = () => {
+    acquireWakeLock();
+    document.removeEventListener("click", onFirstInteraction);
+    document.removeEventListener("touchstart", onFirstInteraction);
+  };
+  document.addEventListener("click", onFirstInteraction, { once: true });
+  document.addEventListener("touchstart", onFirstInteraction, { once: true });
+
+  // Lock dilepas otomatis oleh browser saat tab disembunyikan — begitu user
+  // balik lagi ke tab ini, langsung minta ulang tanpa perlu aksi dari user.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && _wakeLock === null) {
+      acquireWakeLock();
+    }
+  });
+}
+// ===================================================================================
+
+function startHistoryAutoRefresh(){
+  setupWakeLockAutoManage();
+  setupStaleDataRecovery();
+  setInterval(updateRefreshIndicatorText, 15000);
+  setInterval(runHistoryRefreshCycle, HISTORY_REFRESH_MS);
+}
+
+async function runHistoryRefreshCycle(){
+  _lastHistoryRefreshAt = Date.now();
+
+  if (getDataSourceMode() === "gs") {
+    // Mode GS itu ringan (cuma fetch 1 file JSON kecil dari Sheet), jadi
+    // aman untuk auto-refresh PENUH tiap 5 menit — harga & rate ikut
+    // ter-update, bukan cuma %perubahan seperti sebelumnya. Pakai
+    // {silent:true} supaya list tidak "kedip" (skeleton) sementara user
+    // mungkin sedang scroll/baca. Otomatis lewat dispatcher scanAll(),
+    // jadi kalau GS gagal, tetap fallback ke on-chain seperti biasa.
+    await AGG_PRICE.scanAll({ silent: true });
+  } else {
+    // Mode on-chain: scan penuh itu MAHAL (RPC per token, per user) kalau
+    // dipanggil otomatis tiap 5 menit — sengaja TETAP cuma refresh histori
+    // & %perubahan di sini seperti desain semula. Harga tetap perlu
+    // di-refresh manual oleh user (tombol refresh) di mode ini.
+    await loadSharedHistory();
+
+    const sdaPriceLive = await getLiveSdaPrice();
+
+    state.rows.forEach(r => {
+      if (r.usdPrice === null) return;
+      // Pakai rasio mentah yang sudah tersimpan dari hasil scan (lebih akurat
+      // & konsisten dengan histori GS) — JANGAN reverse-derive dari usdPrice,
+      // karena untuk token whitelist stablecoin (mis. sUSDT) usdPrice sengaja
+      // dipatok $1 dan tidak lagi merepresentasikan rasio pool sebenarnya.
+      const nativeRatio = (r.nativeRatio !== null && r.nativeRatio !== undefined)
+        ? r.nativeRatio
+        : (sdaPriceLive > 0 ? r.usdPrice / sdaPriceLive : 0); // fallback untuk baris lama/manual yang belum punya nativeRatio
+      r.change = get24hChange(getHistoryFor(r.symbol), nativeRatio);
+    });
+
+    const isBaseNative = state.base.address === "native" || state.base.symbol === "WSDA";
+    const baseNativeRatio = isBaseNative ? 1 : (await PRICE_ENGINE.getPrice(_engineAddrOf(state.base), "native")) || 0;
+    const baseUsdPriceNow = baseNativeRatio * sdaPriceLive;
+    updateBaseBanner(baseUsdPriceNow, isBaseNative
+      ? getNativeSdaBannerChange(baseUsdPriceNow)
+      : get24hChange(getHistoryFor(state.base.symbol), baseNativeRatio));
+
+    renderList();
+  }
+
+  refreshConverterIfOpen();
+
+  if (_detailToken) {
+    const fresh = state.rows.find(r => r.symbol === _detailToken.symbol);
+    if (fresh) {
+      _detailToken = fresh;
+      renderTokenDetail(fresh);
+      loadTokenDetailLiquidity(fresh);
+      loadTokenDetailVolume(fresh);
+      flashRefreshIndicator();
+    }
+  }
+}
+
+// ================= STALE-DATA RECOVERY =================
+// Wake lock cuma menjaga LAYAR tetap nyala — bukan garansi setInterval jalan
+// terus. Kalau HP dikunci manual, tab di-minimize, atau OS tetap nge-throttle
+// tab di background walau layar nyala, siklus refresh 5 menit bisa berhenti
+// diam-diam. Daripada user mengira data masih live padahal sudah usang, kita
+// deteksi begitu tab kembali terlihat: kalau sudah lewat >1 siklus refresh
+// dari _lastHistoryRefreshAt, tampilkan banner + langsung coba refresh ulang.
+const STALE_THRESHOLD_MS = HISTORY_REFRESH_MS * 1.5;
+let _staleRecoveryInFlight = false;
+
+function isDataStale(){
+  return (Date.now() - _lastHistoryRefreshAt) > STALE_THRESHOLD_MS;
+}
+
+function showStaleBanner(withAction){
+  const el = document.getElementById("staleBanner");
+  const action = document.getElementById("staleBannerAction");
+  const text = document.getElementById("staleBannerText");
+  if (!el) return;
+  if (text) text.textContent = withAction
+    ? "Data mungkin usang — refresh otomatis gagal"
+    : "Data mungkin usang — memperbarui…";
+  if (action) action.style.display = withAction ? "" : "none";
+  el.style.display = "flex";
+}
+
+function hideStaleBanner(){
+  const el = document.getElementById("staleBanner");
+  if (el) el.style.display = "none";
+}
+
+async function recoverFromStaleData(){
+  if (_staleRecoveryInFlight) return;
+  _staleRecoveryInFlight = true;
+  showStaleBanner(false);
+  try {
+    await runHistoryRefreshCycle();
+    hideStaleBanner();
+  } catch (e) {
+    // Gagal (mis. offline) — biarkan banner tampil dengan opsi manual,
+    // daripada diam-diam hilang padahal datanya tetap usang.
+    showStaleBanner(true);
+  } finally {
+    _staleRecoveryInFlight = false;
+  }
+}
+
+function manualStaleRefresh(){
+  recoverFromStaleData();
+}
+
+function setupStaleDataRecovery(){
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && isDataStale()) {
+      recoverFromStaleData();
+    }
+  });
+}
+// =========================================================
 
 function updateRefreshIndicatorText(){
   const el = document.getElementById("refreshIndicatorText");
@@ -1857,7 +2043,7 @@ function attachChartScrubber(){
     dot.style.top = pxY + "px";
     dot.style.opacity = "1";
 
-    const priceLabel = pt.p < 0.01 ? pt.p.toExponential(2) : pt.p.toLocaleString("en-US", { maximumFractionDigits: pt.p < 1 ? 6 : 4 });
+    const priceLabel = pt.p.toLocaleString("en-US", { maximumFractionDigits: pt.p < 0.001 ? 8 : pt.p < 1 ? 6 : 4 });
     const diff = Date.now() - pt.t;
     const timeLabel = diff < 60000 ? "now" : diff < DAY_MS ? fmtDuration(diff) + " ago" :
       new Date(pt.t).toLocaleDateString("en-US", { weekday: "short", hour: "2-digit", minute: "2-digit" });
@@ -2221,7 +2407,7 @@ function buildSparkline(history){
   const areaStr = `${pad},${chH - botPad} ${lineStr} ${w - pad},${chH - botPad}`;
   const last = coords[coords.length - 1];
 
-  const fmtP = (n) => n < 0.01 ? n.toExponential(2) : n.toLocaleString("en-US", { maximumFractionDigits: n < 1 ? 6 : 4 });
+  const fmtP = (n) => n.toLocaleString("en-US", { maximumFractionDigits: n < 0.001 ? 8 : n < 1 ? 6 : 4 });
 
   // Satu tick per HARI KALENDER yang unik di rentang data — bukan rata
   // berdasarkan posisi index atau jarak waktu murni. Itu penting karena
@@ -2474,7 +2660,7 @@ async function loadTokenDetailLiquidity(row){
     const r1 = liq.reserve1 / (10 ** dec1);
     const feePct = (liq.fee / 10000).toFixed(2);
 
-    const fmtN = (n) => !isFinite(n) ? "…" : n < 0.01 ? n.toExponential(2) : n.toLocaleString("en-US", { maximumFractionDigits: n < 1000 ? 4 : 0 });
+    const fmtN = fmtLiqNum;
 
     liqEl.innerHTML = `
       <div class="liq-grid">
