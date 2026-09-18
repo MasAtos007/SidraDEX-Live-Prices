@@ -1667,7 +1667,7 @@ function renderList(){
           </button>
         </div>
         <div class="token-meta">
-          <div class="token-symbol">${t.symbol}<span style="color:var(--text-muted); font-weight:400;"> / ${state.base.symbol}</span>${t.unverified ? `<span class="unverified-badge" title="Belum diverifikasi oleh tim Sidra DEX">Unverified</span>` : ""}</div>
+          <div class="token-symbol">${t.symbol}<span style="color:var(--text-muted); font-weight:400;"> / ${state.base.symbol}</span>${t.unverified ? `<span class="unverified-badge" title="Not verified by the Sidra DEX team">Unverified</span>` : ""}</div>
           <div class="token-name">${t.name}</div>
         </div>
       </div>
@@ -2565,7 +2565,7 @@ function updateDetailFavButton(row){
 function renderTokenDetail(row){
   document.getElementById("detailIcon").src = "img/" + (row.icon || "default.png");
   document.getElementById("detailSymbol").innerHTML = row.symbol + (row.unverified
-    ? `<span class="unverified-badge" title="Belum diverifikasi oleh tim Sidra DEX">Unverified</span>` : "");
+    ? `<span class="unverified-badge" title="Not verified by the Sidra DEX team">Unverified</span>` : "");
   document.getElementById("detailName").textContent = row.name || "";
   updateDetailFavButton(row);
 
@@ -2595,7 +2595,7 @@ function renderTokenDetail(row){
   const unverifiedNote = row.unverified ? `
     <div class="detail-unverified-note">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
-      <span>Token ini belum diverifikasi oleh tim Sidra DEX. Siapa pun bisa membuat token dengan nama/simbol apa saja — selalu cek dulu contract address-nya sebelum trading.</span>
+      <span>This token has not been verified by the Sidra DEX team. Anyone can create a token with any name/symbol — always check the contract address before trading.</span>
     </div>` : "";
 
   document.getElementById("detailBody").innerHTML = `
