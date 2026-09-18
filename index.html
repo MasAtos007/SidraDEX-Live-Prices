@@ -256,6 +256,10 @@
   .token-icon{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#0a0a0c;flex-shrink:0;object-fit:cover;}
   .token-meta{min-width:0;}
   .token-symbol{font-size:13.5px;font-weight:600;}
+  .unverified-badge{display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:600;letter-spacing:.02em;color:var(--red);background:rgba(229,100,95,.12);border:1px solid rgba(229,100,95,.4);border-radius:5px;padding:1px 5px;margin-left:6px;vertical-align:middle;text-transform:uppercase;}
+  body[data-theme="light"] .unverified-badge{color:#a52a25;background:rgba(194,47,40,.08);border-color:rgba(194,47,40,.35);}
+  .detail-unverified-note{display:flex;align-items:flex-start;gap:8px;margin:10px 0 16px;padding:10px 12px;border-radius:12px;background:rgba(229,100,95,.08);border:1px solid rgba(229,100,95,.3);font-size:12px;line-height:1.45;color:var(--text-secondary);}
+  .detail-unverified-note svg{flex-shrink:0;margin-top:1px;color:var(--red);}
   .token-name{font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px;}
   .row-right{text-align:right;flex-shrink:0;}
   .token-price{font-size:13.5px;font-weight:600;}
@@ -622,7 +626,7 @@
              style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;"
              onerror="this.onerror=null;this.src='img/default.png';">
         <div style="min-width:0;">
-          <div class="picker-title" id="detailSymbol">—</div>
+          <div class="picker-title" id="detailSymbol" style="display:flex;align-items:center;gap:0;">—</div>
           <div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" id="detailName"></div>
         </div>
       </div>
@@ -962,6 +966,7 @@ const AGG_PRICE = (() => {
     // "fetched, but no pool found" (null).
     state.rows = list.map(t => ({
       address: t.address, symbol: t.symbol, name: t.name, icon: t.icon,
+      unverified: t.verified === false,
       rate: null, usdPrice: null, nativeRatio: null, change: null, pending: true,
       liqBase: undefined, liqToken: undefined
     }));
@@ -1168,6 +1173,7 @@ const AGG_PRICE = (() => {
 
         const row = {
           address: t.address, symbol: t.symbol, name: t.name, icon: t.icon,
+          unverified: t.verified === false,
           rate: null, usdPrice: null, nativeRatio: null, change: null,
           pending: false, failed: false,
           liqBase: undefined, liqToken: undefined
@@ -1661,7 +1667,7 @@ function renderList(){
           </button>
         </div>
         <div class="token-meta">
-          <div class="token-symbol">${t.symbol}<span style="color:var(--text-muted); font-weight:400;"> / ${state.base.symbol}</span></div>
+          <div class="token-symbol">${t.symbol}<span style="color:var(--text-muted); font-weight:400;"> / ${state.base.symbol}</span>${t.unverified ? `<span class="unverified-badge" title="Belum diverifikasi oleh tim Sidra DEX">Unverified</span>` : ""}</div>
           <div class="token-name">${t.name}</div>
         </div>
       </div>
@@ -2558,7 +2564,8 @@ function updateDetailFavButton(row){
 
 function renderTokenDetail(row){
   document.getElementById("detailIcon").src = "img/" + (row.icon || "default.png");
-  document.getElementById("detailSymbol").textContent = row.symbol;
+  document.getElementById("detailSymbol").innerHTML = row.symbol + (row.unverified
+    ? `<span class="unverified-badge" title="Belum diverifikasi oleh tim Sidra DEX">Unverified</span>` : "");
   document.getElementById("detailName").textContent = row.name || "";
   updateDetailFavButton(row);
 
@@ -2585,7 +2592,14 @@ function renderTokenDetail(row){
   const chart = buildSparkline(rangedHistory);
   _scrubPoints = chart ? chart.points : null;
 
+  const unverifiedNote = row.unverified ? `
+    <div class="detail-unverified-note">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
+      <span>Token ini belum diverifikasi oleh tim Sidra DEX. Siapa pun bisa membuat token dengan nama/simbol apa saja — selalu cek dulu contract address-nya sebelum trading.</span>
+    </div>` : "";
+
   document.getElementById("detailBody").innerHTML = `
+    ${unverifiedNote}
     <div class="detail-price num">${row.pending ? "…" : row.failed ? "no route" : fmtRate(row.rate, state.base.symbol)}</div>
     <div class="detail-sub">${row.usdPrice ? fmtUsd(row.usdPrice) : ""} ${changeHtml}</div>
 
