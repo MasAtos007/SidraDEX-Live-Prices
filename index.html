@@ -281,7 +281,7 @@
 
   .empty,.loading{text-align:center;padding:40px 10px;color:var(--text-muted);font-size:13px;}
 
-  .footer-feedback-row{display:flex;align-items:center;justify-content:center;gap:18px;margin-top:18px;}
+  .footer-feedback-row{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px 14px;margin-top:18px;}
   .footer-feedback{display:flex;align-items:center;gap:6px;padding:10px;font-size:12px;color:var(--text-muted);text-decoration:none;}
   .footer-feedback:active{color:var(--amber);}
 
@@ -529,6 +529,18 @@
     <a class="footer-feedback" href="https://x.com/MasAtos007" target="_blank" rel="noopener" onclick="if(typeof gtag==='function')gtag('event','x_feedback_click');">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2H22l-7.5 8.57L23.3 22h-6.9l-5.4-7.06L4.8 22H1.7l8.03-9.17L0.9 2h7.07l4.88 6.45L18.9 2Zm-1.2 18.17h1.9L6.4 3.73H4.36L17.7 20.17Z"/></svg>
       <span>X</span>
+    </a>
+    <a class="footer-feedback" href="https://www.sidrachain.com" target="_blank" rel="noopener" onclick="if(typeof gtag==='function')gtag('event','sidrachain_link_click');">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      <span>Sidra Chain</span>
+    </a>
+    <a class="footer-feedback" href="https://dex.sidrachain.com" target="_blank" rel="noopener" onclick="if(typeof gtag==='function')gtag('event','sidra_dex_link_click');">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v10M7 20l-3-3M7 20l3-3M17 14V4M17 4l3 3M17 4l-3 3"/></svg>
+      <span>Sidra DEX</span>
+    </a>
+    <a class="footer-feedback" href="https://github.com/MasAtos007/SDA-Wallet/releases/latest" target="_blank" rel="noopener" onclick="if(typeof gtag==='function')gtag('event','sda_wallet_link_click');">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+      <span>SDA Wallet</span>
     </a>
   </div>
 
